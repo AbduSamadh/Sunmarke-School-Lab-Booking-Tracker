@@ -230,13 +230,16 @@ button.cell-free:hover::before { transform: scaleY(1); }
 .lp-stats dd { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.1; }
 
 .lp-art { position: relative; aspect-ratio: 1; width: min(100%, 470px); justify-self: center; }
-.ribbon-globe { width: 100%; height: 100%; display: block; filter: drop-shadow(0 30px 40px rgba(16, 32, 64, .28)); animation: globe-in 900ms var(--spring) both; }
-@keyframes globe-in { from { opacity: 0; transform: scale(.85) rotate(-20deg); } }
-.rg-spin { transform-origin: 200px 200px; animation: rg-spin 70s linear infinite; }
-@keyframes rg-spin { to { transform: rotate(360deg); } }
-.rg-ribbon { stroke-dasharray: 520; stroke-dashoffset: 520; animation: rg-draw 1400ms var(--ease-out) forwards; }
-.rg-r1 { animation-delay: 120ms; } .rg-r2 { animation-delay: 240ms; } .rg-r3 { animation-delay: 360ms; } .rg-r4 { animation-delay: 480ms; } .rg-r5 { animation-delay: 600ms; }
-@keyframes rg-draw { to { stroke-dashoffset: 0; } }
+/* The real logo mark: never redrawn, recoloured or rotated. It only fades in,
+   floats gently, and has rings pulsing out from behind it. */
+.lp-mark { position: absolute; inset: 19%; display: block; border-radius: 50%; animation: mark-in 900ms var(--spring) both, mark-float 6s 900ms ease-in-out infinite; filter: drop-shadow(0 24px 30px rgba(16, 32, 64, .30)); }
+.lp-mark img { width: 100%; height: 100%; display: block; }
+@keyframes mark-in { from { opacity: 0; transform: scale(.7); } }
+@keyframes mark-float { 50% { transform: translateY(-10px); } }
+.lp-ring { position: absolute; inset: 19%; border-radius: 50%; border: 2px solid var(--brand-navy); opacity: 0; animation: ring-out 4.5s ease-out infinite; }
+.lp-ring-2 { border-color: var(--brand-yellow); border-width: 3px; animation-delay: 1.5s; }
+.lp-ring-3 { border-color: var(--brand-cyan); animation-delay: 3s; }
+@keyframes ring-out { 0% { opacity: .55; transform: scale(1); } 100% { opacity: 0; transform: scale(1.55); } }
 .lp-orbit { position: absolute; display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 6px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 12px 28px -12px rgba(16, 32, 64, .35); font-weight: 650; font-size: 14px; white-space: nowrap; animation: orbit-in 600ms var(--spring) both, bob 5s ease-in-out infinite; }
 .lp-orbit-0 { left: -4%; top: 12%; animation-delay: 700ms, 0s; }
 .lp-orbit-1 { right: -6%; top: 6%; animation-delay: 800ms, -1s; }
@@ -283,8 +286,8 @@ button.cell-free:hover::before { transform: scaleY(1); }
 }
 @media (max-width: 520px) { .lp-steps, .lp-labs { grid-template-columns: 1fr; } .lp-art { width: 70%; } }
 @media (prefers-reduced-motion: reduce) {
-  .rg-spin, .lp-orbit { animation: none !important; }
-  .rg-ribbon { stroke-dashoffset: 0; animation: none; }
+  .lp-orbit, .lp-mark { animation: none !important; }
+  .lp-ring { display: none; }
 }
 
 /* ---------- fonts: Tektur (primary) + Nova Square (accent), abd 25 Nov 2026 ---------- */
