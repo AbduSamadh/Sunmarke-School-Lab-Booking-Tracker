@@ -97,7 +97,7 @@ export function renderEmail(opts: { heading: string; rows: [string, string][]; p
     .join("");
   const paras = (opts.paragraphs ?? []).map((p) => `<p style="margin:12px 0">${esc(p)}</p>`).join("");
   const action = opts.action
-    ? `<p style="margin:20px 0"><a href="${esc(opts.action.url)}" style="background:#4338ca;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none">${esc(opts.action.label)}</a></p>`
+    ? `<p style="margin:20px 0"><a href="${esc(opts.action.url)}" style="background:#22397f;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none">${esc(opts.action.label)}</a></p>`
     : "";
   const html = `<!doctype html><html><body style="margin:0;background:#f6f5f2;font-family:'IBM Plex Sans',Arial,sans-serif;font-size:16px;color:#22201c">
 <div style="max-width:560px;margin:0 auto;padding:24px">

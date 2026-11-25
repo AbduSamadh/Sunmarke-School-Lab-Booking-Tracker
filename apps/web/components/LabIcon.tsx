@@ -40,3 +40,17 @@ export function Avatar({ name, size = 30 }: { name: string; size?: number }) {
     </span>
   );
 }
+
+/** School logos from public/brand; the dark-theme copy swaps in via CSS. */
+export function Logo({ name, alt, height }: { name: "sunmarke" | "fortes"; alt: string; height: number }) {
+  const ratio = name === "sunmarke" ? 1000 / 264 : 750 / 271;
+  const w = Math.round(height * ratio);
+  return (
+    <span className={`logo logo-${name}`} style={{ height }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img className="logo-light" src={`/brand/${name}.png`} alt={alt} width={w} height={height} />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img className="logo-dark" src={`/brand/${name}-dark.png`} alt={alt} width={w} height={height} />
+    </span>
+  );
+}

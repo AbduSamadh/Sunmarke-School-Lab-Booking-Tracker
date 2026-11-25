@@ -10,15 +10,16 @@ import { RegisterSW } from "@/components/RegisterSW";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Motion } from "@/components/Motion";
 import { Assistant } from "@/components/Assistant";
-import { Avatar, SunMark } from "@/components/LabIcon";
+import { Avatar, Logo } from "@/components/LabIcon";
 import { cookies } from "next/headers";
 
 export const metadata: Metadata = {
   title: "Sunmarke Lab Booking",
   description: "Book Sunmarke's labs and AI Carts.",
   manifest: "/manifest.webmanifest",
+  icons: { icon: "/brand/sunmarke-mark.png", apple: "/brand/sunmarke-mark.png" },
 };
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#4338ca" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#22397f" };
 export const dynamic = "force-dynamic";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -34,9 +35,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </div>
         <header className="topbar">
           <div className="topbar-inner">
-            <a className="brand" href="/">
-              <SunMark />
-              <span className="brand-word">Sunmarke<span>Labs</span></span>
+            <a className="brand" href="/" aria-label="Sunmarke School Lab Booking, home">
+              <Logo name="sunmarke" alt="" height={42} />
+              <span className="brand-app">Lab Booking</span>
             </a>
             {actor && <Nav role={actor.role} />}
             {!actor && <div style={{ flex: 1 }} />}
@@ -56,6 +57,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </div>
         </header>
         <main id="main" className="main">{children}</main>
+        <footer className="site-foot">
+          <div className="site-foot-inner">
+            <Logo name="sunmarke" alt="Sunmarke School" height={36} />
+            <span className="small muted">Sunmarke School Lab Booking · part of</span>
+            <Logo name="fortes" alt="Fortes Education" height={44} />
+          </div>
+        </footer>
         <RegisterSW />
         <Motion />
         {actor && <Assistant firstName={actor.name.split(" ")[0]} role={actor.role} />}

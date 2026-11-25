@@ -1,8 +1,7 @@
 /*
  * Sunmarke Lab Booking design tokens ("Sunlit", 25 Nov 2026).
- * D10 PLACEHOLDER: the accent and sun colours stand in until Sunmarke's brand
- * colours, logo and font arrive from marketing. Swap the --accent* and --sun
- * values (and the fonts) and every screen follows.
+ * Colours come from the Sunmarke School logo (navy ring, ribbon colours) that
+ * abd supplied on 25 Nov 2026. Fonts are still our choice (D10).
  */
 :root {
   --font-sans: "Plus Jakarta Sans Variable", "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -20,12 +19,12 @@
   --text-3: #6b645b;      /* 5.8:1 on --surface */
 
   /* accent: indigo; sun: the decorative brand highlight */
-  --accent: #4338ca;
-  --accent-hover: #3730a3;
-  --accent-soft: #ecebfc;
+  --accent: #22397f;
+  --accent-hover: #172a63;
+  --accent-soft: #e7ebf7;
   --on-accent: #ffffff;
-  --sun: #ffc53d;
-  --sun-ink: #7a4a00;
+  --sun: #f8e620;
+  --sun-ink: #5c5200;
 
   /* status: always paired with text, never colour alone */
   --ok: #17703f; --ok-soft: #e2f4e8;
@@ -33,11 +32,15 @@
   --bad: #b42318; --bad-soft: #fde7e4;
 
   /* one colour per lab, used for icons, grid, emails and reports (3:1+ on surface) */
-  --r-quantum: #2563eb;
-  --r-carts: #c2570c;
-  --r-dollarx: #0f8a5f;
-  --r-xreal: #8b3fd1;
-  --r-strike: #d92d42;
+  --r-quantum: #0f86bd;
+  --r-carts: #d0690c;
+  --r-dollarx: #6a8d10;
+  --r-xreal: #903088;
+  --r-strike: #d4237c;
+
+  /* Sunmarke logo ribbons and ring (decorative artwork only, same in both themes) */
+  --brand-navy: #22397f; --brand-ink: #102040; --brand-yellow: #f8e620; --brand-green: #a8c038;
+  --brand-orange: #e88020; --brand-cyan: #18a8d8; --brand-pink: #e02880; --brand-purple: #903088;
 
   --radius: 12px;
   --radius-sm: 8px;
@@ -48,24 +51,24 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #12121a; --surface: #1b1b25; --surface-2: #242431;
-    --line: #30303f; --line-strong: #4b4b5e;
+    --bg: #0e1424; --surface: #161e33; --surface-2: #1f2840;
+    --line: #2c3650; --line-strong: #46526f;
     --text: #f3f1ec; --text-2: #c6c3bb; --text-3: #a7a49c;
-    --accent: #a5a6ff; --accent-hover: #c0c1ff; --accent-soft: #272752; --on-accent: #14134a;
-    --sun: #ffd166; --sun-ink: #ffd166;
+    --accent: #9fb3f0; --accent-hover: #bccaf5; --accent-soft: #1f2a4d; --on-accent: #0f1c40;
+    --sun: #f8e620; --sun-ink: #f8e620;
     --ok: #6fd69a; --ok-soft: #173325; --warn: #f0bb62; --warn-soft: #3a2d16; --bad: #ff9a8f; --bad-soft: #3e1f1c;
-    --r-quantum: #74a3ff; --r-carts: #f59e4b; --r-dollarx: #45d09c; --r-xreal: #c494f5; --r-strike: #ff7d8c;
+    --r-quantum: #4cc3ef; --r-carts: #f29a45; --r-dollarx: #b5d34b; --r-xreal: #d487cc; --r-strike: #f56aab;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   }
 }
 :root[data-theme="dark"] {
-  --bg: #12121a; --surface: #1b1b25; --surface-2: #242431;
-  --line: #30303f; --line-strong: #4b4b5e;
+  --bg: #0e1424; --surface: #161e33; --surface-2: #1f2840;
+  --line: #2c3650; --line-strong: #46526f;
   --text: #f3f1ec; --text-2: #c6c3bb; --text-3: #a7a49c;
-  --accent: #a5a6ff; --accent-hover: #c0c1ff; --accent-soft: #272752; --on-accent: #14134a;
-  --sun: #ffd166; --sun-ink: #ffd166;
+  --accent: #9fb3f0; --accent-hover: #bccaf5; --accent-soft: #1f2a4d; --on-accent: #0f1c40;
+  --sun: #f8e620; --sun-ink: #f8e620;
   --ok: #6fd69a; --ok-soft: #173325; --warn: #f0bb62; --warn-soft: #3a2d16; --bad: #ff9a8f; --bad-soft: #3e1f1c;
-  --r-quantum: #74a3ff; --r-carts: #f59e4b; --r-dollarx: #45d09c; --r-xreal: #c494f5; --r-strike: #ff7d8c;
+  --r-quantum: #4cc3ef; --r-carts: #f29a45; --r-dollarx: #b5d34b; --r-xreal: #d487cc; --r-strike: #f56aab;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
