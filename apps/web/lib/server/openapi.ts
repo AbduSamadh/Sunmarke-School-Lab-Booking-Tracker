@@ -50,7 +50,7 @@ export const OPS: Op[] = [
   { method: "post", path: "/absences", tag: "In-charge", roles: ["incharge", "admin"], body: S.AbsenceInput, summary: "Record in-charge leave; affected bookings are covered or flagged." },
   { method: "delete", path: "/absences/{id}", tag: "In-charge", roles: ["incharge", "admin"], summary: "Remove a leave record." },
   { method: "post", path: "/admin/staff-import", tag: "Admin", roles: ["admin"], body: S.StaffImportInput, summary: "Import staff from CSV (name, email, department, role)." },
-  { method: "get", path: "/reports/export", tag: "Reports", roles: ["admin", "viewer"], produces: "csv", query: [["table", "bookings | utilisation | load | department | curriculum"], ["from", date], ["to", date], ["resource", "Lab id"], ["department", "Department"], ["campus", "Campus id (group admins)"]], summary: "Report tables as CSV." },
+  { method: "get", path: "/reports/export", tag: "Reports", roles: ["admin", "viewer"], produces: "csv", query: [["table", "bookings | utilisation | load | teacher | department | curriculum"], ["from", date], ["to", date], ["resource", "Lab id"], ["department", "Department"], ["campus", "Campus id (group admins)"]], summary: "Report tables as CSV." },
   { method: "get", path: "/notifications/{id}/ics", tag: "Admin", roles: ["admin", "incharge"], produces: "ics", summary: "The calendar invite attached to a sent email." },
   { method: "post", path: "/devices", tag: "Phone app", body: S.DeviceInput, summary: "Register this phone's push token." },
   { method: "delete", path: "/devices", tag: "Phone app", body: S.DeviceRemove, summary: "Stop notifications to this phone." },

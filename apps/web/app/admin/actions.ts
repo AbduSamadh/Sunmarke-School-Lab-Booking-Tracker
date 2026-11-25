@@ -32,13 +32,15 @@ export async function saveResource(fd: FormData) {
       location: z.string().trim().max(80).default(""),
       primary: z.string().min(1),
       fallback: z.string().optional(),
+      third: z.string().optional(),
       active: z.string().optional(),
     })
     .safeParse(Object.fromEntries(fd.entries()));
   if (!p.success) return err("resources", p.error.issues[0].message);
   const d = p.data;
-  if (d.fallback && d.fallback === d.primary) return err("resources", "Primary and fallback must be different people.");
-  if (!(await inCampus(actor, "resources", [d.id])) || !(await inCampus(actor, "staff", [d.primary, d.fallback])))
+  const people = [d.primary, d.fallback, d.third].filter(Boolean);
+  if (new Set(people).size !== people.length) return err("resources", "Pick a different person for each in-charge.");
+  if (!(await inCampus(actor, "resources", [d.id])) || !(await inCampus(actor, "staff", [d.primary, d.fallback, d.third])))
     return err("resources", "That lab or person belongs to another campus.");
   const before = await db.query("SELECT * FROM resources WHERE id = $1", [d.id]);
   await db.transaction(async (tx) => {
@@ -46,6 +48,7 @@ export async function saveResource(fd: FormData) {
     await tx.query("DELETE FROM incharge_assignments WHERE resource_id = $1", [d.id]);
     await tx.query("INSERT INTO incharge_assignments VALUES ($1,$2,1)", [d.id, d.primary]);
     if (d.fallback) await tx.query("INSERT INTO incharge_assignments VALUES ($1,$2,2)", [d.id, d.fallback]);
+    if (d.third) await tx.query("INSERT INTO incharge_assignments VALUES ($1,$2,3)", [d.id, d.third]);
     await audit(tx, { actorId: actor.id, action: "resource.update", entity: "resource", entityId: d.id, before: before[0], after: d });
   });
   back("resources");

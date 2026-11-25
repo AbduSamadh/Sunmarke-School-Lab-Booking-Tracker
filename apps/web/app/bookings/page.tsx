@@ -15,7 +15,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   const all = await listBookings(db, { teacherId: actor.id, from: addDays(localDate(t, DEFAULT_SETTINGS), -60) });
   const toRow = (b: (typeof all)[number]): Row => ({
     id: b.id, resourceId: b.resourceId, resourceName: b.resourceName, colour: b.resourceColour, date: b.date, blockLabel: b.blockLabel, timeLabel: b.timeLabel,
-    inchargeName: b.inchargeName, classLabel: b.classLabel, subject: b.subject, studentCount: b.studentCount, cartCount: b.cartCount, classroom: b.classroom,
+    inchargeName: [b.inchargeName, ...b.supportNames].join(", "), classLabel: b.classLabel, subject: b.subject, studentCount: b.studentCount, cartCount: b.cartCount, classroom: b.classroom,
     objective: b.objective, specialRequirements: b.specialRequirements, status: b.status, statusReason: b.statusReason,
     recurrenceId: b.recurrenceId, rating: b.rating, started: b.start.getTime() <= t.getTime(),
     curriculum: b.curriculumIds.map((id) => levels.get(id)).filter(Boolean) as string[],

@@ -283,26 +283,43 @@ export function evaluate(world: WorldState, req: BookingRequest): Evaluation {
   }
   if (resource.type === "room") unitsLeftAfter = 0;
 
-  // R2–R5: primary first, then fallback; the same person must cover every block (T14)
+  // R2–R5: primary first, then the next in priority; the same people cover every block (T14).
+  // AI Carts: one in-charge goes with each cart, so n carts need n free in-charges (abd, 25 Nov).
+  const needed = resource.type === "cart_pool" ? units : 1;
   const cands = candidatesFor(state, resource.id);
   const reasons: string[] = [];
+  const picked: typeof cands = [];
   for (const c of cands) {
+    if (picked.length === needed) break;
     const busy = blocks.map((b) => ({ b, r: inchargeBusy(state, c.staffId, req.date, b, req.ignoreBookingId) })).find((x) => x.r);
-    if (!busy) {
-      return {
-        ok: true,
-        inchargeId: c.staffId,
-        inchargeName: staffName(state, c.staffId),
-        crossCover: c.priority !== cands[0].priority,
-        unitsLeftAfter,
-      };
-    }
-    reasons.push(`${staffName(state, c.staffId)} busy ${busy.r!.text}${blocks.length > 1 ? ` at ${busy.b.code}` : ""}`);
+    if (!busy) picked.push(c);
+    else reasons.push(`${staffName(state, c.staffId)} busy ${busy.r!.text}${blocks.length > 1 ? ` at ${busy.b.code}` : ""}`);
   }
+  if (picked.length === needed) {
+    return {
+      ok: true,
+      inchargeId: picked[0].staffId,
+      inchargeName: staffName(state, picked[0].staffId),
+      crossCover: picked[0].priority !== cands[0].priority,
+      unitsLeftAfter,
+      inchargeIds: picked.map((c) => c.staffId),
+      inchargeNames: picked.map((c) => staffName(state, c.staffId)),
+    };
+  }
+  if (needed > 1 && picked.length > 0)
+    return blocked("no_incharge", `Only ${picked.length} lab in-charge${picked.length === 1 ? " is" : "s are"} free, and each cart goes with its own in-charge.`, {
+      suggestion: `Book ${picked.length} cart${picked.length === 1 ? "" : "s"}, or pick another period. ${reasons.join("; ")}`,
+      canWaitlist: true,
+    });
   return blocked("no_incharge", "No lab in-charge available", {
     suggestion: reasons.join("; "),
     canWaitlist: true,
   });
+}
+
+/** How many in-charges assigned to a resource are free for a block (caps AI Carts per period). */
+export function freeIncharges(state: WorldState, resourceId: string, date: ISODate, block: Block, ignoreBookingId?: string): number {
+  return candidatesFor(state, resourceId).filter((c) => !inchargeBusy(state, c.staffId, date, block, ignoreBookingId)).length;
 }
 
 export function holdsAt(holds: SlotHold[], resourceId: string, date: ISODate, blockId: string, ignore?: string) {
@@ -325,13 +342,17 @@ export function cellStatus(state: WorldState, resource: Resource, date: ISODate,
   const bookingIds = holdsAt(state.holds, resource.id, date, block.id).map((h) => h.bookingId);
   if (ev.ok) {
     const used = holdsAt(state.holds, resource.id, date, block.id).reduce((n, h) => n + h.units, 0);
+    const scoped = scopeToCampus(state, resource.campusId);
+    // AI Carts: what can still go out is limited by carts left and by free in-charges (one per cart).
+    const cap = resource.type === "cart_pool" ? Math.min(resource.units, state.settings.maxCartsPerBooking, candidatesFor(scoped, resource.id).length) : resource.units;
+    const left = resource.type === "cart_pool" ? Math.min(resource.units - used, freeIncharges(scoped, resource.id, date, block), cap) : resource.units - used;
     return {
       state: "free",
       inchargeId: ev.inchargeId,
       inchargeName: ev.inchargeName,
       crossCover: ev.crossCover,
-      unitsLeft: resource.units - used,
-      unitsTotal: resource.units,
+      unitsLeft: left,
+      unitsTotal: cap,
     };
   }
   if (ev.code === "resource_booked") return { state: "booked", bookingIds, reason: ev.reason };

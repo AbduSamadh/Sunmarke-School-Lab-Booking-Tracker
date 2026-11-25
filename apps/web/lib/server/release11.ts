@@ -25,7 +25,9 @@ async function moveToIncharge(db: Db, actor: Actor | null, b: BookingDetail, sta
   const primary = await db.query<{ staff_id: string }>("SELECT staff_id FROM incharge_assignments WHERE resource_id = $1 ORDER BY priority LIMIT 1", [b.resourceId]);
   try {
     await db.transaction(async (tx) => {
-      await tx.query("UPDATE booking_slots SET incharge_id = $2 WHERE booking_id = $1 AND active", [b.id, staffId]);
+      // Only the lead's slots move; support in-charges on a cart booking keep theirs.
+      if (b.supportIds.includes(staffId)) throw new Error("already on this booking");
+      await tx.query("UPDATE booking_slots SET incharge_id = $2 WHERE booking_id = $1 AND incharge_id = $3 AND active", [b.id, staffId, b.inchargeId]);
       await tx.query("UPDATE bookings SET incharge_id = $2, cross_cover = $3, updated_at = $4 WHERE id = $1", [
         b.id, staffId, primary[0]?.staff_id !== staffId, now().toISOString(),
       ]);

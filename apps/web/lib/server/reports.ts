@@ -56,9 +56,10 @@ export async function buildReport(db: Db, f: ReportFilters) {
       return { id: r.id, name: r.name, type: r.type, colour: r.colour, sessions: mine.length, bookedBlocks: blocks, unitBlocks, bookableBlocks: cap, pct };
     });
 
-  const incharges = staff.filter((s) => used.some((b) => b.inchargeId === s.id));
+  // A cart booking keeps every in-charge who goes with a cart busy, so each counts it.
+  const incharges = staff.filter((s) => used.some((b) => b.staffIds.includes(s.id)));
   const load = incharges.map((s) => {
-    const mine = used.filter((b) => b.inchargeId === s.id);
+    const mine = used.filter((b) => b.staffIds.includes(s.id));
     const cross = mine.filter((b) => b.crossCover).length;
     return { id: s.id, name: s.name, sessions: mine.length, crossCover: cross, crossPct: mine.length ? cross / mine.length : 0 };
   });
@@ -139,6 +140,31 @@ export async function buildReport(db: Db, f: ReportFilters) {
   };
   const covered = curriculum.levels.filter((l) => l.sessions > 0).length;
 
+  // Teacher-wise (abd, 25 Nov 2026): who uses the labs, how reliably, and what they think.
+  const byTeacherMap = new Map<string, (typeof all)[number][]>();
+  for (const b of all) byTeacherMap.set(b.teacherId, [...(byTeacherMap.get(b.teacherId) ?? []), b]);
+  const byTeacher = [...byTeacherMap.entries()]
+    .map(([id, list]) => {
+      const u = list.filter((b) => (USED as readonly string[]).includes(b.status));
+      const ratings = list.map((b) => b.rating).filter((r): r is number => r !== null);
+      const labs = new Map<string, number>();
+      for (const b of u) labs.set(b.resourceName, (labs.get(b.resourceName) ?? 0) + 1);
+      return {
+        id,
+        name: list[0].teacherName,
+        department: list[0].department,
+        sessions: u.length,
+        attended: list.filter((b) => b.status === "completed").length,
+        noShows: list.filter((b) => b.status === "no_show").length,
+        cancelled: list.filter((b) => b.status === "cancelled").length,
+        cartSessions: u.filter((b) => b.cartCount).length,
+        students: u.reduce((n, b) => n + b.studentCount, 0),
+        labs: [...labs.entries()].sort((a, b) => b[1] - a[1]).map(([name, n]) => `${name} (${n})`).join(", "),
+        avgRating: ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null,
+      };
+    })
+    .sort((a, b) => b.sessions - a.sessions || a.name.localeCompare(b.name));
+
   return {
     filters: f,
     feedback,
@@ -159,6 +185,7 @@ export async function buildReport(db: Db, f: ReportFilters) {
     },
     utilisation,
     load,
+    byTeacher,
     turnedAway,
     heat,
     blockCodes,

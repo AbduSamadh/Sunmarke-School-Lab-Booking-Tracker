@@ -82,6 +82,12 @@ export interface BookingDetail {
   rating: number | null;
   /** Release 2: KS3 progressive plan levels this lesson covers. */
   curriculumIds: string[];
+  /** AI Carts: the other in-charges going with the carts (one per cart, lead excluded). */
+  supportIds: string[];
+  supportNames: string[];
+  supportEmails: string[];
+  /** Lead plus support: everyone this booking keeps busy. */
+  staffIds: string[];
 }
 
 type Row = {
@@ -90,13 +96,16 @@ type Row = {
   cross_cover: boolean; subject: string; year_group: string; section: string; student_count: number; cart_count: number | null; classroom: string | null;
   objective: string; lesson_plan_url: string | null; special_requirements: string; status: BookingStatus; status_reason: string | null; created_at: Date;
   recurrence_id: string | null; checked_in_at: Date | null; rating: number | null; curriculum_ids: string[] | null;
+  support_ids: string[] | null; support_names: string[] | null; support_emails: string[] | null;
 };
 
 const SELECT = `
 SELECT b.*, r.name AS resource_name, r.type AS resource_type, r.colour,
   t.name AS teacher_name, t.email AS teacher_email, t.department,
   i.name AS incharge_name, i.email AS incharge_email,
-  (SELECT f.rating FROM feedback f WHERE f.booking_id = b.id) AS rating
+  (SELECT f.rating FROM feedback f WHERE f.booking_id = b.id) AS rating,
+  ARRAY(SELECT s.name FROM unnest(b.support_ids) WITH ORDINALITY u(id, n) JOIN staff s ON s.id = u.id ORDER BY u.n) AS support_names,
+  ARRAY(SELECT s.email FROM unnest(b.support_ids) WITH ORDINALITY u(id, n) JOIN staff s ON s.id = u.id ORDER BY u.n) AS support_emails
 FROM bookings b
 JOIN resources r ON r.id = b.resource_id
 JOIN staff t ON t.id = b.teacher_id
@@ -151,6 +160,10 @@ async function toDetails(db: Db, rows: Row[]): Promise<BookingDetail[]> {
       checkedInAt: r.checked_in_at ? new Date(r.checked_in_at) : null,
       rating: r.rating ?? null,
       curriculumIds: r.curriculum_ids ?? [],
+      supportIds: r.support_ids ?? [],
+      supportNames: r.support_names ?? [],
+      supportEmails: r.support_emails ?? [],
+      staffIds: [r.incharge_id, ...(r.support_ids ?? [])],
     };
   });
 }
@@ -243,21 +256,24 @@ export async function createBooking(
       if (!ev.ok) throw new JustTaken(ev.reason);
       await tx.query(
         `INSERT INTO bookings (id, resource_id, date, block_ids, teacher_id, incharge_id, subject, year_group, section, student_count,
-          cart_count, classroom, objective, lesson_plan_url, special_requirements, status, cross_cover, created_by, created_at, updated_at, recurrence_id, curriculum_ids)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'confirmed',$16,$17,$18,$18,$19,$20)`,
+          cart_count, classroom, objective, lesson_plan_url, special_requirements, status, cross_cover, created_by, created_at, updated_at, recurrence_id, curriculum_ids, support_ids)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'confirmed',$16,$17,$18,$18,$19,$20,$21)`,
         [
           id, input.resourceId, input.date, input.blockIds, teacherId, ev.inchargeId, input.subject, input.yearGroup, input.section,
           input.studentCount, resource?.type === "cart_pool" ? input.cartCount : null, resource?.type === "cart_pool" ? input.classroom : null,
           input.objective, input.lessonPlanUrl || null, input.specialRequirements, ev.crossCover, actor.id, t.toISOString(), opts.recurrenceId ?? null, curriculumIds,
+          ev.inchargeIds.slice(1),
         ],
       );
-      for (const blockId of input.blockIds) {
-        await tx.query(
-          "INSERT INTO booking_slots (booking_id, incharge_id, resource_id, room_key, date, block_id, units) VALUES ($1,$2,$3,$4,$5,$6,$7)",
-          [id, ev.inchargeId, input.resourceId, resource?.type === "room" ? input.resourceId : null, input.date, blockId, resource?.type === "cart_pool" ? input.cartCount : 1],
-        );
-      }
-      await audit(tx, { actorId: actor.id, action: override ? "booking.create.override" : "booking.create", entity: "booking", entityId: id, after: { ...input, inchargeId: ev.inchargeId } });
+      // One slot per in-charge per block: a cart booking holds one cart and one in-charge per row,
+      // so the unique index on (incharge, date, block) keeps every in-charge in one place.
+      for (const blockId of input.blockIds)
+        for (const who of ev.inchargeIds)
+          await tx.query(
+            "INSERT INTO booking_slots (booking_id, incharge_id, resource_id, room_key, date, block_id, units) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+            [id, who, input.resourceId, resource?.type === "room" ? input.resourceId : null, input.date, blockId, 1],
+          );
+      await audit(tx, { actorId: actor.id, action: override ? "booking.create.override" : "booking.create", entity: "booking", entityId: id, after: { ...input, inchargeIds: ev.inchargeIds } });
       await tx.query("UPDATE waitlist SET status = 'booked' WHERE teacher_id = $1 AND resource_id = $2 AND date = $3 AND block_id = ANY($4) AND status IN ('waiting','offered')", [
         teacherId, input.resourceId, input.date, input.blockIds,
       ]);
@@ -295,7 +311,7 @@ async function loadForChange(db: Db, actor: Actor, id: string, allow: "owner" | 
   const b = await getBookingDetail(db, id);
   if (!b) throw new AppError(404, "not_found", "Booking not found.");
   const isOwner = b.teacherId === actor.id;
-  const isIncharge = b.inchargeId === actor.id || actor.role === "incharge";
+  const isIncharge = b.staffIds.includes(actor.id) || actor.role === "incharge";
   const ok = actor.role === "admin" || (allow === "owner" ? isOwner : isIncharge && actor.role !== "teacher");
   if (!ok) {
     await audit(db, { actorId: actor.id, action: "authz.denied", entity: "booking", entityId: id, after: { allow } });

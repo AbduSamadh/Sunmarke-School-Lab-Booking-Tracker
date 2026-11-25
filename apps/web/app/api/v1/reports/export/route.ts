@@ -3,7 +3,7 @@ import { buildReport, reportCampus, toCsv } from "@/lib/server/reports";
 import { addDays, localDate, DEFAULT_SETTINGS } from "@sunmarke/rules";
 import { now } from "@/lib/server/util";
 
-/** GET /api/v1/reports/export?table=bookings|utilisation|load|department|curriculum&from&to&resource&department → CSV (opens in Excel). */
+/** GET /api/v1/reports/export?table=bookings|utilisation|load|teacher|department|curriculum&from&to&resource&department → CSV (opens in Excel). */
 export const GET = handler({ roles: ["admin", "viewer"] }, async ({ db, req, actor }) => {
   const u = new URL(req.url);
   const today = localDate(now(), DEFAULT_SETTINGS);
@@ -17,6 +17,8 @@ export const GET = handler({ roles: ["admin", "viewer"] }, async ({ db, req, act
   else if (table === "load") rows = [["In-charge", "Sessions", "Cross-cover sessions", "Cross-cover %"], ...rep.load.map((x) => [x.name, x.sessions, x.crossCover, Math.round(x.crossPct * 1000) / 10])];
   else if (table === "curriculum")
     rows = [["Code", "Strand", "Level", "Year", "Sessions", "Classes"], ...rep.curriculum.levels.map((x) => [x.code, x.strand, x.title, x.yearGroup, x.sessions, x.classes])];
+  else if (table === "teacher")
+    rows = [["Teacher", "Department", "Sessions", "Attended", "No-shows", "Cancelled", "Cart sessions", "Students", "Labs used", "Average rating"], ...rep.byTeacher.map((x) => [x.name, x.department, x.sessions, x.attended, x.noShows, x.cancelled, x.cartSessions, x.students, x.labs, x.avgRating === null ? "" : Math.round(x.avgRating * 10) / 10])];
   else if (table === "department") rows = [["Department", "Sessions"], ...rep.byDepartment.map((x) => [x.label, x.n])];
   else
     rows = [

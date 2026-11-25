@@ -12,7 +12,7 @@ export const GET = handler({}, async ({ db, actor, req }) => {
   const to = url.searchParams.get("to") ?? undefined;
   if (asIncharge) {
     const rows = await listBookings(db, { from, to, status: ["confirmed", "completed", "no_show"] });
-    return { bookings: rows.filter((b) => b.inchargeId === actor.id) };
+    return { bookings: rows.filter((b) => b.staffIds.includes(actor.id)) };
   }
   const bookings = await listBookings(db, { teacherId: all ? undefined : actor.id, from, to });
   return { bookings };

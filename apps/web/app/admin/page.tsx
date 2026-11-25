@@ -72,11 +72,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
       {tab === "resources" && (
         <div className="stack">
-          <p className="muted">The primary in-charge is always tried first; the fallback covers only when the primary is busy.</p>
+          <p className="muted">The primary in-charge is always tried first, then the fallback, then the third. Each AI Cart goes out with its own in-charge, so a 3-cart booking needs all three.</p>
           <div className="table-wrap">
             <table className="data">
               <thead>
-                <tr><th>Name</th><th>Type</th><th className="num">Units</th><th>Location</th><th>Primary</th><th>Fallback</th><th>Active</th><th><span className="sr-only">Save</span></th></tr>
+                <tr><th>Name</th><th>Type</th><th className="num">Units</th><th>Location</th><th>Primary</th><th>Fallback</th><th>Third</th><th>Active</th><th><span className="sr-only">Save</span></th></tr>
               </thead>
               <tbody>
                 {resources.map((r) => {
@@ -95,6 +95,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                       </td>
                       <td>
                         <select form={f} name="fallback" defaultValue={a[1]?.staffId ?? ""} aria-label="Fallback in-charge">
+                          <option value="">None</option>
+                          {incharges.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </td>
+                      <td>
+                        <select form={f} name="third" defaultValue={a[2]?.staffId ?? ""} aria-label="Third in-charge">
                           <option value="">None</option>
                           {incharges.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>

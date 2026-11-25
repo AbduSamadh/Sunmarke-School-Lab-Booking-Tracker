@@ -155,6 +155,33 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         </div>
       </section>
 
+      <section style={{ marginTop: 20 }} aria-labelledby="teacher-title">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <h2 id="teacher-title">By teacher</h2>
+          <a className="small" href={`/api/v1/reports/export?table=teacher&${qs}`}>CSV</a>
+        </div>
+        <div className="table-wrap">
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Teacher</th><th>Department</th><th className="num">Sessions</th><th className="num">Attended</th><th className="num">No-shows</th>
+                <th className="num">Cancelled</th><th className="num">Cart sessions</th><th className="num">Students</th><th>Labs used</th><th className="num">Rating</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rep.byTeacher.length === 0 && <tr><td colSpan={10} className="muted">No bookings in this range.</td></tr>}
+              {rep.byTeacher.map((t) => (
+                <tr key={t.id}>
+                  <td>{t.name}</td><td>{t.department}</td><td className="num">{t.sessions}</td><td className="num">{t.attended}</td>
+                  <td className="num">{t.noShows}</td><td className="num">{t.cancelled}</td><td className="num">{t.cartSessions}</td><td className="num">{t.students}</td>
+                  <td className="small">{t.labs || "-"}</td><td className="num">{t.avgRating === null ? "-" : t.avgRating.toFixed(1)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <div className="cols" style={{ marginTop: 20 }}>
         <section>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>

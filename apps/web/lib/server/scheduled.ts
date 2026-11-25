@@ -47,7 +47,7 @@ export async function sendDailyDigest(db: Db, date?: string) {
   const sessions = await listBookings(db, { from: day, to: day, status: ["confirmed"] });
   let sent = 0;
   for (const ic of incharges) {
-    const mine = sessions.filter((b) => b.inchargeId === ic.id);
+    const mine = sessions.filter((b) => b.staffIds.includes(ic.id));
     const already = await db.query("SELECT 1 FROM notifications WHERE template = 'digest' AND recipient = $1 AND subject LIKE $2", [ic.email, `%${fmtDateLong(day)}%`]);
     if (already.length) continue;
     const rows: [string, string][] = mine.length

@@ -14,7 +14,11 @@ const STAFF = [
   ["abd", "Abd", "abd@sunmarke.example", "Labs", "admin"],
   ["ram", "Ram", "ram@sunmarke.example", "Labs", "incharge"],
   ["abdul", "Abdul", "abdul@sunmarke.example", "Labs", "incharge"],
+  // abd, 25 Nov 2026: Nael is the third lab in-charge.
+  ["nael", "Nael", "nael@sunmarke.example", "Labs", "incharge"],
   ["neil", "Dr. Neil", "neil@sunmarke.example", "Leadership", "viewer"],
+  // abd, 25 Nov 2026: Dr. Sreejit for SLT, the Principal's office and the Board of Directors.
+  ["sreejit", "Dr. Sreejit", "sreejit@sunmarke.example", "SLT, Principal and BOD", "viewer"],
   ["t-sara", "Sara Khan", "sara.khan@sunmarke.example", "Science", "teacher"],
   ["t-omar", "Omar Haddad", "omar.haddad@sunmarke.example", "Computing", "teacher"],
   ["t-priya", "Priya Nair", "priya.nair@sunmarke.example", "Primary", "teacher"],
@@ -31,7 +35,7 @@ const RESOURCES = [
   ["strike", "Strike Lab", "room", 1, "Senior block", 28, "strike", 5],
 ] as const;
 
-const SUBJECTS = ["Science", "Physics", "Chemistry", "Biology", "Computing", "Maths", "English", "Design & Technology", "Art", "Music", "Geography", "History", "Arabic", "Islamic Studies", "French", "Business", "PE"];
+const SUBJECTS = ["Science", "Physics", "Chemistry", "Biology", "Computing", "Maths", "English", "Design & Technology", "Art", "Music", "Geography", "History", "Arabic", "Islamic Studies", "French", "Business", "PE", "Other"];
 const YEARS = ["FS1", "FS2", ...Array.from({ length: 13 }, (_, i) => `Y${i + 1}`)];
 const SECTIONS = ["A", "B", "C", "D", "E", "F"];
 
@@ -63,7 +67,7 @@ export async function seed(db: Db) {
   for (const [res, primary, fallback] of [
     ["quantum", "ram", "abdul"], ["carts", "ram", "abdul"], ["dollarx", "abdul", "ram"], ["xreal", "abdul", "ram"], ["strike", "abdul", "ram"],
   ]) {
-    await db.query("INSERT INTO incharge_assignments VALUES ($1,$2,1),($1,$3,2) ON CONFLICT DO NOTHING", [res, primary, fallback]);
+    await db.query("INSERT INTO incharge_assignments VALUES ($1,$2,1),($1,$3,2),($1,'nael',3) ON CONFLICT DO NOTHING", [res, primary, fallback]);
   }
   const tt = standardTimetable();
   await db.query("INSERT INTO timetables (id, name, valid_from, valid_to, weekdays, priority) VALUES ($1,$2,NULL,NULL,$3,0) ON CONFLICT DO NOTHING", [tt.id, tt.name, tt.weekdays]);
@@ -78,7 +82,7 @@ export async function seed(db: Db) {
     await db.query("INSERT INTO curriculum_levels (id, code, strand, title, year_group, sort) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING", [`cl-${code.toLowerCase()}`, code, strand, title, year, i]);
   await db.query("INSERT INTO meta VALUES ('curriculum_sample', 'true') ON CONFLICT DO NOTHING");
   // Abd (lab admin) and Dr. Neil (leadership) can see every campus once there is more than one.
-  await db.query("UPDATE staff SET all_campuses = true WHERE id IN ('abd', 'neil')");
+  await db.query("UPDATE staff SET all_campuses = true WHERE id IN ('abd', 'neil', 'sreejit')");
 
   await seedHistory(db);
   await seedUpcoming(db);
@@ -94,7 +98,7 @@ async function seedUpcoming(db: Db) {
   const base = { section: "", objective: "", specialRequirements: "", overrideWindow: true };
   const plan: [string, string, string, string, Partial<Parameters<typeof createBooking>[2]>][] = [
     [addDays(mon, 1), "P3", "quantum", "t-sara", { subject: "Science", yearGroup: "Y8", section: "B", studentCount: 24, objective: "Build and test a simple circuit" }],
-    [addDays(mon, 1), "P3", "carts", "t-priya", { subject: "Computing", yearGroup: "Y5", section: "C", studentCount: 26, cartCount: 4, classroom: "Room 2.14", objective: "Intro to block coding" }],
+    [addDays(mon, 1), "P3", "carts", "t-priya", { subject: "Computing", yearGroup: "Y5", section: "C", studentCount: 26, cartCount: 2, classroom: "Room 2.14", objective: "Intro to block coding" }],
     [addDays(mon, 2), "P2", "xreal", "t-omar", { subject: "Computing", yearGroup: "Y10", section: "A", studentCount: 20, objective: "VR field trip: the solar system" }],
     [addDays(mon, 3), "P1", "dollarx", "t-lucy", { subject: "Maths", yearGroup: "Y9", section: "D", studentCount: 25, objective: "Budgeting simulation" }],
     [addDays(mon, 3), "P5", "strike", "t-james", { subject: "Design & Technology", yearGroup: "Y11", section: "A", studentCount: 18, objective: "Prototype testing" }],
@@ -140,7 +144,7 @@ async function seedHistory(db: Db) {
       for (const resourceId of ["quantum", "carts", "dollarx", "xreal", "strike"]) {
         if (rnd() > (resourceId === "carts" ? 0.3 : 0.38)) continue;
         const teacher = teachers[Math.floor(rnd() * teachers.length)];
-        const units = resourceId === "carts" ? 1 + Math.floor(rnd() * 5) : 1;
+        const units = resourceId === "carts" ? 1 + Math.floor(rnd() * 3) : 1;
         const ev = evaluate(world, { resourceId, date, blockIds: [P(block)], units, now: fakeNow });
         if (!ev.ok) {
           await db.query("INSERT INTO booking_attempts (teacher_id, resource_id, date, block_id, code, at) VALUES ($1,$2,$3,$4,$5,$6)", [teacher, resourceId, date, P(block), ev.code, fakeNow.toISOString()]);
@@ -151,17 +155,19 @@ async function seedHistory(db: Db) {
         const subject = SUBJECTS[Math.floor(rnd() * 8)];
         const year = YEARS[3 + Math.floor(rnd() * 11)];
         await db.query(
-          `INSERT INTO bookings (id, resource_id, date, block_ids, teacher_id, incharge_id, subject, year_group, section, student_count, cart_count, classroom, status, cross_cover, created_by, created_at, curriculum_ids)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$5,$15,$16)`,
+          `INSERT INTO bookings (id, resource_id, date, block_ids, teacher_id, incharge_id, subject, year_group, section, student_count, cart_count, classroom, status, cross_cover, created_by, created_at, curriculum_ids, support_ids)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$5,$15,$16,$17)`,
           [id, resourceId, date, [P(block)], teacher, ev.inchargeId, subject, year, SECTIONS[Math.floor(rnd() * 4)], 18 + Math.floor(rnd() * 10),
             resourceId === "carts" ? units : null, resourceId === "carts" ? `Room ${1 + Math.floor(rnd() * 3)}.${10 + Math.floor(rnd() * 9)}` : null, status, ev.crossCover,
-            new Date(fakeNow.getTime() - Math.floor(rnd() * 10) * 86_400_000).toISOString(), sampleLevels(year, id)],
+            new Date(fakeNow.getTime() - Math.floor(rnd() * 10) * 86_400_000).toISOString(), sampleLevels(year, id), ev.inchargeIds.slice(1)],
         );
         if (status !== "cancelled") {
-          await db.query("INSERT INTO booking_slots (booking_id, incharge_id, resource_id, room_key, date, block_id, units) VALUES ($1,$2,$3,$4,$5,$6,$7)", [
-            id, ev.inchargeId, resourceId, resourceId === "carts" ? null : resourceId, date, P(block), units,
-          ]);
-          world.holds.push({ bookingId: id, resourceId, inchargeId: ev.inchargeId, date, blockId: P(block), units });
+          for (const who of ev.inchargeIds) {
+            await db.query("INSERT INTO booking_slots (booking_id, incharge_id, resource_id, room_key, date, block_id, units) VALUES ($1,$2,$3,$4,$5,$6,1)", [
+              id, who, resourceId, resourceId === "carts" ? null : resourceId, date, P(block),
+            ]);
+            world.holds.push({ bookingId: id, resourceId, inchargeId: who, date, blockId: P(block), units: 1 });
+          }
         }
       }
     }

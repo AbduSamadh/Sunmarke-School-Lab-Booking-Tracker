@@ -75,22 +75,18 @@ export function BookingSheet(props: {
   const firstField = useRef<HTMLSelectElement | null>(null);
   const closeBtn = useRef<HTMLButtonElement | null>(null);
 
-  const bookable = day.blocks.filter((b) => b.bookable);
-  const idx = bookable.findIndex((b) => b.id === block.id);
-  const nextBlock = idx >= 0 ? bookable[idx + 1] : undefined;
-  const nextFree = nextBlock && day.cells[resource.id][nextBlock.id]?.kind === "free" ? nextBlock : undefined;
 
   const [f, setF] = useState({
     subject: defaults.subject,
     yearGroup: defaults.yearGroup,
     section: defaults.section,
     studentCount: String(defaults.studentCount || ""),
-    cartCount: String(Math.min(defaults.cartCount || 4, free && cell.kind === "free" ? cell.unitsLeft : 10)),
+    cartCount: String(Math.max(1, Math.min(defaults.cartCount || 1, free && cell.kind === "free" ? cell.unitsLeft : 3))),
     classroom: defaults.classroom,
     objective: "",
     lessonPlanUrl: "",
     specialRequirements: "",
-    double: false,
+    otherSubject: "",
     onBehalfOf: "",
     repeat: false,
     everyWeeks: "1",
@@ -147,8 +143,8 @@ export function BookingSheet(props: {
       startDate: day.date,
       endDate: f.endDate,
       everyWeeks: Number(f.everyWeeks),
-      blockCodes: f.double && nextFree ? [block.code, nextFree.code] : [block.code],
-      subject: f.subject,
+      blockCodes: [block.code],
+      subject: f.subject === "Other" ? f.otherSubject.trim() : f.subject,
       yearGroup: f.yearGroup,
       section: f.section,
       studentCount: Number(f.studentCount),
@@ -189,8 +185,8 @@ export function BookingSheet(props: {
     const body: Record<string, unknown> = {
       resourceId: resource.id,
       date: day.date,
-      blockIds: f.double && nextFree ? [block.id, nextFree.id] : [block.id],
-      subject: f.subject,
+      blockIds: [block.id],
+      subject: f.subject === "Other" ? f.otherSubject.trim() : f.subject,
       yearGroup: f.yearGroup,
       section: f.section,
       studentCount: Number(f.studentCount),
@@ -347,6 +343,12 @@ export function BookingSheet(props: {
                   </select>
                 </div>
               </div>
+              {f.subject === "Other" && (
+                <div className="field">
+                  <label htmlFor="f-other">Which subject?</label>
+                  <input id="f-other" type="text" required maxLength={80} placeholder="e.g. Robotics club" value={f.otherSubject} onChange={set("otherSubject")} />
+                </div>
+              )}
               <div className={isCart ? "row3" : "row2"}>
                 <div className="field">
                   <label htmlFor="f-students">Students</label>
@@ -356,7 +358,8 @@ export function BookingSheet(props: {
                   <>
                     <div className="field">
                       <label htmlFor="f-carts">Carts</label>
-                      <input id="f-carts" type="number" inputMode="numeric" min={1} max={cell.kind === "free" ? cell.unitsLeft : 10} required value={f.cartCount} onChange={set("cartCount")} />
+                      <input id="f-carts" type="number" inputMode="numeric" min={1} max={cell.kind === "free" ? cell.unitsLeft : 3} required value={f.cartCount} aria-describedby="f-carts-hint" onChange={set("cartCount")} />
+                      <div className="hint" id="f-carts-hint">Up to 3. Each cart comes with its own lab in-charge.</div>
                     </div>
                     <div className="field">
                       <label htmlFor="f-room">Classroom</label>
@@ -365,14 +368,6 @@ export function BookingSheet(props: {
                   </>
                 )}
               </div>
-              {nextFree && (
-                <div className="field">
-                  <label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 400, minHeight: 44 }}>
-                    <input type="checkbox" checked={f.double} onChange={set("double")} style={{ width: 20, height: 20 }} />
-                    Double lesson: also book {nextFree.code} ({nextFree.start}–{nextFree.end})
-                  </label>
-                </div>
-              )}
               <div className="field">
                 <label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 400, minHeight: 44 }}>
                   <input type="checkbox" checked={f.repeat} onChange={set("repeat")} style={{ width: 20, height: 20 }} />
@@ -436,7 +431,7 @@ export function BookingSheet(props: {
             <div className="sheet-foot">
               <button type="button" className="btn" onClick={() => props.onClose(changed)}>Cancel</button>
               <button type="submit" className="btn btn-primary" disabled={step.s === "sending"}>
-                {step.s === "sending" ? (f.repeat ? "Checking…" : "Booking…") : f.repeat ? "Check dates" : `Book ${resource.name.replace(" Lab", "")}, ${fmtDateShort(day.date).split(" ")[0]} ${f.double && nextFree ? `${block.code}–${nextFree.code}` : block.code}`}
+                {step.s === "sending" ? (f.repeat ? "Checking…" : "Booking…") : f.repeat ? "Check dates" : `Book ${resource.name.replace(" Lab", "")}, ${fmtDateShort(day.date).split(" ")[0]} ${block.code}`}
               </button>
             </div>
           </form>

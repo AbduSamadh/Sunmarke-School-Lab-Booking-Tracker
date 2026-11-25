@@ -38,7 +38,7 @@ export default async function InchargePage({ searchParams }: { searchParams: Pro
   const resources = (await getResources(db)).filter((r) => r.campusId === campus);
   const campusRes = new Set(resources.map((r) => r.id));
   const who = actor.role === "incharge" ? actor.id : incharges.some((i) => i.id === sp.who) ? sp.who! : "all";
-  const mine = (b: BookingDetail) => who === "all" || b.inchargeId === who;
+  const mine = (b: BookingDetail) => who === "all" || b.staffIds.includes(who);
 
   // This week (or the week asked for); weekends roll to the next school week.
   const baseMon = mondayOf(isoWeekday(today) > 5 ? addDays(today, 2) : today);

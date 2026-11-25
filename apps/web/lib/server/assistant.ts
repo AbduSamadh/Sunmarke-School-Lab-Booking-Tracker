@@ -50,7 +50,7 @@ export interface AssistantReply {
 /** What the conversation has gathered so far; the browser sends it back with the next message. */
 export type Draft = Omit<Parsed, "intent" | "topic" | "dateText"> & { pending?: "book" | "waitlist" };
 
-const SUGGEST = ["What's free tomorrow?", "Book Quantum next Tuesday P3", "My bookings", "How do I book a double lesson?"];
+const SUGGEST = ["What's free tomorrow?", "Book Quantum next Tuesday P3", "My bookings", "How do AI Carts work?"];
 
 export async function context(db: Db, campusId?: string): Promise<ParseContext & { settings: Awaited<ReturnType<typeof getSettings>> }> {
   const settings = await getSettings(db);
@@ -149,8 +149,8 @@ export function rules(topic: Parsed["topic"], s: Awaited<ReturnType<typeof getSe
   const a: Record<string, string[]> = {
     window: [`You can book from ${s.minLeadHours} hours to ${Math.round(s.maxLeadDays / 7)} weeks ahead. Repeating lessons can be planned up to ${s.recurringMaxDays} days ahead.`],
     cancel: [`Cancel from My bookings up to ${s.cancelCutoffHours} hours before the lesson. After that, contact the in-charge. To change the time, cancel and book again; you can edit the class details any time.`],
-    double: ["Pick the first period, then tick \"Double lesson\" in the booking form. Or ask me: \"Book Quantum Tuesday P3-P4\". Both periods need the same in-charge free."],
-    carts: [`AI Carts come to your classroom. Book 1 to ${s.maxCartsPerBooking} carts in one go and say which room, for example \"Book 4 carts Thursday P2 to Room 2.14\".`],
+    double: ["Double lessons aren't offered: each booking is one period. If you need two, book each period on its own."],
+    carts: [`AI Carts come to your classroom, and each cart comes with its own lab in-charge, so booking carts also takes in-charges away from the labs that period. Book 1 to ${s.maxCartsPerBooking} carts in one go and say which room, for example \"Book 4 carts Thursday P2 to Room 2.14\".`],
     waitlist: [`If a slot is taken, join its waitlist. When it frees up, the first teacher waiting gets it held for ${s.waitlistHoldHours} hours and an email.`],
     incharge: ["Every session needs a lab in-charge: Ram looks after Quantum and the AI Carts, Abdul looks after DollarX, XReal and Strike, and each covers for the other when free. The app picks who is free for you. Only the lab admin can swap them."],
     series: ["Tick \"Repeat this lesson\" in the booking form, choose how often and until when. You see every date first; dates that aren't free are skipped."],
@@ -291,6 +291,13 @@ export async function book(db: Db, actor: Actor, ctx: Awaited<ReturnType<typeof 
     };
   }
   if (isoWeekday(d.date) > 5) return { text: [`${fmtDateLong(d.date)} is a weekend. Which school day?`], draft: { ...keep, date: undefined } };
+  // abd, 25 Nov 2026: no double lessons; one period per booking.
+  if (d.blockCodes.length > 1)
+    return {
+      text: [`Bookings are one period at a time. Shall I book ${d.blockCodes[0]}? Book ${d.blockCodes[1]} separately if you need it.`],
+      draft: { ...keep, blockCodes: [d.blockCodes[0]], double: false },
+      suggestions: [`Book ${d.blockCodes[0]}`],
+    };
 
   const forId = actor.role === "admin" && d.forStaffId && d.forStaffId !== actor.id ? d.forStaffId : undefined;
   const teacherId = forId ?? actor.id;

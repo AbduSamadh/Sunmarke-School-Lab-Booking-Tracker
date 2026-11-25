@@ -93,7 +93,8 @@ export interface RuleSettings {
   minLeadHours: number; // D6: 24
   maxLeadDays: number; // D6: 28
   cancelCutoffHours: number; // D6: 2
-  maxCartsPerBooking: number; // D4: 10
+  /** abd, 25 Nov: at most 3 carts, because each cart goes out with its own lab in-charge. */
+  maxCartsPerBooking: number;
   /** Fair-use quota: most lab blocks one teacher may hold in a school week. 0 = no limit. */
   quotaPerTeacherWeek: number;
   /** Fair-use quota: most lab blocks one department may hold in a school week. 0 = no limit. */
@@ -111,7 +112,7 @@ export const DEFAULT_SETTINGS: RuleSettings = {
   minLeadHours: 24,
   maxLeadDays: 28,
   cancelCutoffHours: 2,
-  maxCartsPerBooking: 10,
+  maxCartsPerBooking: 3,
   quotaPerTeacherWeek: 0,
   quotaPerDeptWeek: 0,
   waitlistHoldHours: 2,
@@ -200,6 +201,12 @@ export interface Allocation {
   inchargeName: string;
   crossCover: boolean; // true when the fallback covers
   unitsLeftAfter: number;
+  /**
+   * Everyone going with the booking, lead first. One for a lab; one per cart for
+   * AI Carts (abd, 25 Nov: every cart is accompanied by its own in-charge).
+   */
+  inchargeIds: string[];
+  inchargeNames: string[];
 }
 
 export interface Blocked {

@@ -288,6 +288,11 @@ ALTER TABLE blackouts ADD COLUMN IF NOT EXISTS campus_id text NOT NULL DEFAULT '
 ALTER TABLE staff ADD COLUMN IF NOT EXISTS all_campuses boolean NOT NULL DEFAULT false;
 -- The campus Labs Hub (Google Site): linked in the footer and in confirmation emails.
 ALTER TABLE campuses ADD COLUMN IF NOT EXISTS hub_url text NOT NULL DEFAULT '';
+-- abd, 25 Nov: each AI Cart goes with its own in-charge. The lead is bookings.incharge_id;
+-- the others are here, and every one of them holds its own row in booking_slots.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS support_ids text[] NOT NULL DEFAULT '{}';
+-- abd, 25 Nov: messages go to Teams instead of email.
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS channel text NOT NULL DEFAULT 'email';
 
 -- Curriculum mapping: the KS3 progressive plan, as admin-editable levels.
 CREATE TABLE IF NOT EXISTS curriculum_levels (

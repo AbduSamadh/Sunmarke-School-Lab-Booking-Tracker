@@ -602,7 +602,7 @@
                       "maxLength": 60
                     },
                     "minItems": 1,
-                    "maxItems": 3
+                    "maxItems": 1
                   },
                   "subject": {
                     "type": "string",
@@ -627,7 +627,7 @@
                   "cartCount": {
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 10
+                    "maximum": 3
                   },
                   "classroom": {
                     "type": "string",
@@ -1552,7 +1552,7 @@
                       "maxLength": 20
                     },
                     "minItems": 1,
-                    "maxItems": 3
+                    "maxItems": 1
                   },
                   "subject": {
                     "type": "string",
@@ -1577,7 +1577,7 @@
                   "cartCount": {
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 10
+                    "maximum": 3
                   },
                   "classroom": {
                     "type": "string",
@@ -2676,7 +2676,7 @@
             "name": "table",
             "in": "query",
             "required": false,
-            "description": "bookings | utilisation | load | department | curriculum",
+            "description": "bookings | utilisation | load | teacher | department | curriculum",
             "schema": {
               "type": "string"
             }
