@@ -26,6 +26,8 @@ export interface Timetable {
   /** Higher wins when two timetables cover the same date. Standard = 0. */
   priority: number;
   blocks: Block[];
+  /** Release 2 multi-campus: the campus this timetable belongs to. Unset = every campus. */
+  campusId?: string;
 }
 
 export type ResourceType = "room" | "cart_pool";
@@ -36,6 +38,8 @@ export interface Resource {
   type: ResourceType;
   units: number; // 1 for rooms, 10 for the AI Cart pool
   active: boolean;
+  /** Release 2 multi-campus. Unset = the single-campus behaviour. */
+  campusId?: string;
 }
 
 export interface InchargeAssignment {
@@ -69,6 +73,8 @@ export interface Blackout {
   blockCodes: string[] | null; // null = whole day
   reason: BlackoutReason;
   note?: string;
+  /** For a whole-school blackout (resourceId null): the campus it closes. Unset = every campus. */
+  campusId?: string | null;
 }
 
 /** A busy interval from an in-charge's own calendar (meetings, leave...). */

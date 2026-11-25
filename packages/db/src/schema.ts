@@ -6,7 +6,7 @@
  * booking_slots, not by application code alone.
  * Nothing booking-related is hard-deleted: rows are deactivated or status-changed.
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta (key text PRIMARY KEY, value text NOT NULL);
@@ -267,5 +267,48 @@ CREATE TABLE IF NOT EXISTS lookups (
   value text NOT NULL,
   sort int NOT NULL DEFAULT 0,
   PRIMARY KEY (kind, value)
+);
+
+-- Release 2 ------------------------------------------------------------------
+-- Multi-campus: every campus has its own labs, staff, timetables and blackouts.
+CREATE TABLE IF NOT EXISTS campuses (
+  id text PRIMARY KEY,
+  name text NOT NULL,
+  short_name text NOT NULL DEFAULT '',
+  sort int NOT NULL DEFAULT 0,
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO campuses (id, name, short_name) VALUES ('sunmarke', 'Sunmarke School', 'Sunmarke') ON CONFLICT DO NOTHING;
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS campus_id text NOT NULL DEFAULT 'sunmarke' REFERENCES campuses(id);
+ALTER TABLE resources ADD COLUMN IF NOT EXISTS campus_id text NOT NULL DEFAULT 'sunmarke' REFERENCES campuses(id);
+ALTER TABLE timetables ADD COLUMN IF NOT EXISTS campus_id text NOT NULL DEFAULT 'sunmarke' REFERENCES campuses(id);
+ALTER TABLE blackouts ADD COLUMN IF NOT EXISTS campus_id text NOT NULL DEFAULT 'sunmarke' REFERENCES campuses(id);
+-- Group admins (Fortes) see and manage every campus; everyone else sees their own.
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS all_campuses boolean NOT NULL DEFAULT false;
+-- Arabic UI: preferred language per person (cookie wins on a shared device).
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS locale text NOT NULL DEFAULT 'en' CHECK (locale IN ('en','ar'));
+
+-- Curriculum mapping: the KS3 progressive plan, as admin-editable levels.
+CREATE TABLE IF NOT EXISTS curriculum_levels (
+  id text PRIMARY KEY,
+  code text NOT NULL UNIQUE,
+  strand text NOT NULL,
+  title text NOT NULL,
+  year_group text NOT NULL DEFAULT '',
+  sort int NOT NULL DEFAULT 0,
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS curriculum_ids text[] NOT NULL DEFAULT '{}';
+
+-- Phone app: device tokens for push notifications (Expo push tokens).
+CREATE TABLE IF NOT EXISTS push_devices (
+  token text PRIMARY KEY,
+  staff_id text NOT NULL REFERENCES staff(id),
+  platform text NOT NULL CHECK (platform IN ('ios','android','web')),
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  last_seen_at timestamptz NOT NULL DEFAULT now()
 );
 `;

@@ -7,7 +7,8 @@ const SEV: Record<string, string> = { high: "tag-bad", medium: "tag-warn", low: 
 
 /** Equipment log: report a fault (optionally taking the lab out of use) and close it when fixed. */
 export async function IssuesPanel({ db, resources, back, today }: { db: Db; resources: { id: string; name: string }[]; back: string; today: string }) {
-  const issues = await listIssues(db, "open");
+  const ids = new Set(resources.map((r) => r.id));
+  const issues = (await listIssues(db, "open")).filter((i) => ids.has(i.resource_id));
   return (
     <div className="cols">
       <section>

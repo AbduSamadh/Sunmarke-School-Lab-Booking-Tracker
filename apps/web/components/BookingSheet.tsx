@@ -95,8 +95,12 @@ export function BookingSheet(props: {
     repeat: false,
     everyWeeks: "1",
     endDate: addDaysIso(day.date, 7 * 9),
+    curriculumIds: [] as string[],
   });
   const isAdmin = props.role === "admin";
+  // Release 2: levels for the chosen year group (levels with no year apply to every year).
+  const levels = (lookups.curriculum ?? []).filter((l) => !l.yearGroup || l.yearGroup === f.yearGroup);
+  const picked = f.curriculumIds.filter((id) => levels.some((l) => l.id === id));
 
   useEffect(() => {
     setStep(cell.kind === "free" ? { s: "form" } : { s: "info", loading: true, reason: cellReason(cell), canWaitlist: false, alternatives: [] });
@@ -150,6 +154,7 @@ export function BookingSheet(props: {
       studentCount: Number(f.studentCount),
       objective: f.objective,
       specialRequirements: f.specialRequirements,
+      ...(picked.length ? { curriculumIds: picked } : {}),
       ...(isCart ? { cartCount: Number(f.cartCount), classroom: f.classroom } : {}),
       ...(isAdmin && f.onBehalfOf ? { onBehalfOf: f.onBehalfOf } : {}),
       preview,
@@ -193,6 +198,7 @@ export function BookingSheet(props: {
       specialRequirements: f.specialRequirements,
       lessonPlanUrl: f.lessonPlanUrl,
     };
+    if (picked.length) body.curriculumIds = picked;
     if (isCart) {
       body.cartCount = Number(f.cartCount);
       body.classroom = f.classroom;
@@ -394,6 +400,27 @@ export function BookingSheet(props: {
                 <label htmlFor="f-obj">Lesson objective <span className="muted">(optional)</span></label>
                 <input id="f-obj" type="text" maxLength={300} value={f.objective} onChange={set("objective")} placeholder="e.g. Test a simple circuit" />
               </div>
+              {levels.length > 0 && (
+                <fieldset className="field curriculum-pick">
+                  <legend>Curriculum <span className="muted">(optional, up to 5)</span></legend>
+                  <div className="chips">
+                    {levels.map((l) => {
+                      const on = f.curriculumIds.includes(l.id);
+                      return (
+                        <label key={l.id} className={`chip-check${on ? " is-on" : ""}`} title={l.title}>
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            disabled={!on && picked.length >= 5}
+                            onChange={() => setF((x) => ({ ...x, curriculumIds: on ? x.curriculumIds.filter((y) => y !== l.id) : [...x.curriculumIds, l.id] }))}
+                          />
+                          <span><strong>{l.code}</strong> {l.title}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              )}
               <details>
                 <summary style={{ cursor: "pointer", minHeight: 36, fontSize: 14 }}>More details</summary>
                 <div className="field" style={{ marginTop: 8 }}>

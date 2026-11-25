@@ -18,6 +18,8 @@ export const BookingInput = z
     objective: z.string().trim().max(300).default(""),
     lessonPlanUrl: z.union([z.string().trim().url().max(500), z.literal("")]).optional(),
     specialRequirements: z.string().trim().max(300).default(""),
+    /** Release 2: KS3 progressive plan levels this lesson covers. */
+    curriculumIds: z.array(z.string().min(1).max(40)).max(5, "Pick up to 5 levels").optional(),
     overrideWindow: z.boolean().optional(),
     /** Admin only: book in a teacher's name. */
     onBehalfOf: z.string().min(1).max(40).optional(),
@@ -35,6 +37,8 @@ export const BookingPatch = z
     objective: z.string().trim().max(300).optional(),
     lessonPlanUrl: z.union([z.string().trim().url().max(500), z.literal("")]).optional(),
     specialRequirements: z.string().trim().max(300).optional(),
+    /** Release 2: KS3 progressive plan levels this lesson covers. */
+    curriculumIds: z.array(z.string().min(1).max(40)).max(5, "Pick up to 5 levels").optional(),
   })
   .strict();
 export type BookingPatch = z.infer<typeof BookingPatch>;
@@ -62,6 +66,8 @@ export const SeriesInput = z
     classroom: z.string().trim().max(40).optional(),
     objective: z.string().trim().max(300).default(""),
     specialRequirements: z.string().trim().max(300).default(""),
+    /** Release 2: KS3 progressive plan levels this lesson covers. */
+    curriculumIds: z.array(z.string().min(1).max(40)).max(5, "Pick up to 5 levels").optional(),
     onBehalfOf: z.string().min(1).max(40).optional(),
     preview: z.boolean().optional(),
   })

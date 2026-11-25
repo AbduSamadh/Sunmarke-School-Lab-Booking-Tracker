@@ -1,20 +1,22 @@
 import { handler } from "@/lib/server/api";
-import { buildReport, toCsv } from "@/lib/server/reports";
+import { buildReport, reportCampus, toCsv } from "@/lib/server/reports";
 import { addDays, localDate, DEFAULT_SETTINGS } from "@sunmarke/rules";
 import { now } from "@/lib/server/util";
 
-/** GET /api/v1/reports/export?table=bookings|utilisation|load|department&from&to&resource&department → CSV (opens in Excel). */
-export const GET = handler({ roles: ["admin", "viewer"] }, async ({ db, req }) => {
+/** GET /api/v1/reports/export?table=bookings|utilisation|load|department|curriculum&from&to&resource&department → CSV (opens in Excel). */
+export const GET = handler({ roles: ["admin", "viewer"] }, async ({ db, req, actor }) => {
   const u = new URL(req.url);
   const today = localDate(now(), DEFAULT_SETTINGS);
   const from = u.searchParams.get("from") || addDays(today, -30);
   const to = u.searchParams.get("to") || today;
-  const rep = await buildReport(db, { from, to, resourceId: u.searchParams.get("resource") || undefined, department: u.searchParams.get("department") || undefined });
+  const rep = await buildReport(db, { from, to, resourceId: u.searchParams.get("resource") || undefined, department: u.searchParams.get("department") || undefined, campusId: reportCampus(actor, u.searchParams.get("campus")) });
   const table = u.searchParams.get("table") ?? "bookings";
   let rows: (string | number | null)[][];
   if (table === "utilisation")
     rows = [["Resource", "Sessions", "Booked blocks", "Bookable blocks", "Utilisation %"], ...rep.utilisation.map((x) => [x.name, x.sessions, x.type === "cart_pool" ? x.unitBlocks : x.bookedBlocks, x.bookableBlocks, Math.round(x.pct * 1000) / 10])];
   else if (table === "load") rows = [["In-charge", "Sessions", "Cross-cover sessions", "Cross-cover %"], ...rep.load.map((x) => [x.name, x.sessions, x.crossCover, Math.round(x.crossPct * 1000) / 10])];
+  else if (table === "curriculum")
+    rows = [["Code", "Strand", "Level", "Year", "Sessions", "Classes"], ...rep.curriculum.levels.map((x) => [x.code, x.strand, x.title, x.yearGroup, x.sessions, x.classes])];
   else if (table === "department") rows = [["Department", "Sessions"], ...rep.byDepartment.map((x) => [x.label, x.n])];
   else
     rows = [

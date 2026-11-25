@@ -64,16 +64,41 @@ export function mondayOf(date: ISODate): ISODate {
 // covers a date wins (Ramadan/Friday over Standard).
 // ---------------------------------------------------------------------------
 
-export function timetableForDate(timetables: Timetable[], date: ISODate): Timetable | null {
+export function timetableForDate(timetables: Timetable[], date: ISODate, campusId?: string): Timetable | null {
   const wd = isoWeekday(date);
   const candidates = timetables.filter(
     (t) =>
+      (!t.campusId || !campusId || t.campusId === campusId) &&
       t.weekdays.includes(wd) &&
       (t.validFrom === null || t.validFrom <= date) &&
       (t.validTo === null || t.validTo >= date),
   );
   if (candidates.length === 0) return null;
   return candidates.sort((a, b) => b.priority - a.priority)[0];
+}
+
+// ---------------------------------------------------------------------------
+// Campuses (Release 2). Each campus has its own labs, in-charges, timetables and
+// blackouts; the rules are the same. A world is always judged one campus at a time.
+// ---------------------------------------------------------------------------
+
+/** The campus a block belongs to, found through the timetable that owns it. */
+export function campusOfBlock(timetables: Timetable[], blockId: string): string | undefined {
+  return timetables.find((t) => t.blocks.some((b) => b.id === blockId))?.campusId;
+}
+
+/** Only one campus's labs, timetables, blackouts and assignments. */
+export function scopeToCampus(state: WorldState, campusId: string | undefined): WorldState {
+  if (!campusId) return state;
+  const resources = state.resources.filter((r) => !r.campusId || r.campusId === campusId);
+  const ids = new Set(resources.map((r) => r.id));
+  return {
+    ...state,
+    resources,
+    timetables: state.timetables.filter((t) => !t.campusId || t.campusId === campusId),
+    blackouts: state.blackouts.filter((b) => (b.resourceId ? ids.has(b.resourceId) : !b.campusId || b.campusId === campusId)),
+    assignments: state.assignments.filter((a) => ids.has(a.resourceId)),
+  };
 }
 
 function sortedBlocks(t: Timetable): Block[] {
@@ -169,10 +194,11 @@ function blocked(code: Blocked["code"], reason: string, extra: Partial<Blocked> 
   return { ok: false, code, reason, canWaitlist: false, ...extra };
 }
 
-export function evaluate(state: WorldState, req: BookingRequest): Evaluation {
-  const s = state.settings;
-  const resource = state.resources.find((r) => r.id === req.resourceId && r.active);
+export function evaluate(world: WorldState, req: BookingRequest): Evaluation {
+  const s = world.settings;
+  const resource = world.resources.find((r) => r.id === req.resourceId && r.active);
   if (!resource) return blocked("unknown_resource", "This lab or cart pool is not available for booking.");
+  const state = scopeToCampus(world, resource.campusId);
 
   const timetable = timetableForDate(state.timetables, req.date);
   if (!timetable) return blocked("no_timetable", "No school timetable on this day.");
@@ -325,8 +351,9 @@ export interface Alternative {
  * Next steps when a slot is unavailable: the same resource at other blocks that day,
  * then other resources at the same block. Used for "Just taken" and blocked cells.
  */
-export function alternatives(state: WorldState, req: BookingRequest, limit = 3): Alternative[] {
+export function alternatives(world: WorldState, req: BookingRequest, limit = 3): Alternative[] {
   const out: Alternative[] = [];
+  const state = scopeToCampus(world, world.resources.find((r) => r.id === req.resourceId)?.campusId);
   const t = timetableForDate(state.timetables, req.date);
   if (!t) return out;
   const blocks = sortedBlocks(t).filter((b) => b.bookable);
@@ -373,7 +400,7 @@ export function findConflicts(state: WorldState): Conflict[] {
   const out: Conflict[] = [];
   const ext = externalBusy(state.busy);
   for (const h of state.holds) {
-    const t = timetableForDate(state.timetables, h.date);
+    const t = timetableForDate(state.timetables, h.date, campusOfBlock(state.timetables, h.blockId));
     const block = t?.blocks.find((b) => b.id === h.blockId);
     if (!block) continue;
     const iv = blockInterval(h.date, block, state.settings);
@@ -399,7 +426,7 @@ export function findConflicts(state: WorldState): Conflict[] {
 
 /** Can this person cover every block of a booking? Returns the first reason they cannot. */
 export function canCover(state: WorldState, staffId: string, date: ISODate, blockIds: string[], ignoreBookingId?: string): BusyReason | null {
-  const t = timetableForDate(state.timetables, date);
+  const t = timetableForDate(state.timetables, date, blockIds[0] ? campusOfBlock(state.timetables, blockIds[0]) : undefined);
   for (const id of blockIds) {
     const b = t?.blocks.find((x) => x.id === id);
     if (!b) return { kind: "booking", text: "block not on timetable" };
@@ -439,4 +466,9 @@ export function recurringDates(start: ISODate, end: ISODate, everyWeeks = 1, max
 export function weekRange(date: ISODate): { from: ISODate; to: ISODate } {
   const from = mondayOf(date);
   return { from, to: addDays(from, 6) };
+}
+
+/** A block by id on a date, from the timetable of the campus that owns it. */
+export function blockOn(timetables: Timetable[], date: ISODate, blockId: string): Block | undefined {
+  return timetableForDate(timetables, date, campusOfBlock(timetables, blockId))?.blocks.find((b) => b.id === blockId);
 }

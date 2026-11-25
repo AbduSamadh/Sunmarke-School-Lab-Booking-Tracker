@@ -3,7 +3,7 @@ import { requireActor } from "@/lib/server/auth";
 import { getDb } from "@/lib/server/db";
 import { getAssignments, getBlackouts, getResources, getSettings, getStaff, getTimetables } from "@/lib/server/world";
 import { currentConflicts } from "@/lib/server/scheduled";
-import { getBookingDetail, listBookings } from "@/lib/server/bookings";
+import { campusOf, getBookingDetail, listBookings } from "@/lib/server/bookings";
 import { ensureCheckinCodes } from "@/lib/server/release11";
 import { IssuesPanel } from "@/components/IssuesPanel";
 import QRCode from "qrcode";
@@ -12,7 +12,7 @@ import { now } from "@/lib/server/util";
 import { fmtDateShort } from "@/lib/shared/format";
 import { StaffImport } from "@/components/StaffImport";
 import { blockTime, removeBlackout } from "../incharge/actions";
-import { addResource, addTimetable, reassign, retireTimetable, saveLinks, saveResource, saveRules, setStaffActive, toggleCalendarOutage } from "./actions";
+import { addCampus, addLevel, addResource, importLevels, saveLevel, addTimetable, reassign, retireTimetable, saveCampus, saveLinks, saveResource, saveRules, setStaffActive, setStaffCampus, toggleCalendarOutage } from "./actions";
 
 const TABS = [
   ["resources", "Labs and carts"],
@@ -22,32 +22,47 @@ const TABS = [
   ["blackouts", "Blackout dates"],
   ["staff", "Staff"],
   ["rules", "Rules"],
+  ["curriculum", "Curriculum"],
   ["qr", "QR codes"],
   ["system", "Calendar and jobs"],
   ["audit", "Audit log"],
+  ["campuses", "Campuses"],
 ] as const;
 const WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ tab?: string; saved?: string; error?: string; ran?: string }> }) {
-  await requireActor(["admin"]);
+  const actor = await requireActor(["admin"]);
   const sp = await searchParams;
-  const tab = TABS.some(([k]) => k === sp.tab) ? sp.tab! : "resources";
+  const tabs = TABS.filter(([k]) => k !== "campuses" || actor.allCampuses);
+  const tab = tabs.some(([k]) => k === sp.tab) ? sp.tab! : "resources";
   const db = await getDb();
   const settings = await getSettings(db);
   const today = localDate(now(), settings);
-  const [resources, staff, assignments, timetables] = await Promise.all([getResources(db), getStaff(db), getAssignments(db), getTimetables(db)]);
-  const incharges = staff.filter((s) => s.role === "incharge" || s.role === "admin");
+  // Release 2: an admin works on one campus at a time; group admins switch campus in the top bar.
+  const campus = campusOf(actor);
+  const [allResources, allStaff, assignments, allTimetables, campuses] = await Promise.all([
+    getResources(db),
+    getStaff(db),
+    getAssignments(db),
+    getTimetables(db),
+    db.query<{ id: string; name: string; short_name: string; active: boolean }>("SELECT id, name, short_name, active FROM campuses ORDER BY sort, name"),
+  ]);
+  const resources = allResources.filter((r) => r.campusId === campus);
+  const staff = actor.allCampuses ? allStaff : allStaff.filter((s) => s.campusId === campus);
+  const timetables = allTimetables.filter((t) => t.campusId === campus);
+  const incharges = allStaff.filter((s) => s.campusId === campus && s.active && (s.role === "incharge" || s.role === "admin"));
+  const campusName = campuses.find((c) => c.id === campus)?.name ?? campus;
 
   return (
     <div>
       <div className="page-head">
         <div>
           <h1>Admin</h1>
-          <p className="muted" style={{ margin: 0 }}>Every change here is recorded in the audit log.</p>
+          <p className="muted" style={{ margin: 0 }}>{campuses.length > 1 ? `${campusName}. ` : ""}Every change here is recorded in the audit log.</p>
         </div>
       </div>
       <nav className="tabs" aria-label="Admin sections">
-        {TABS.map(([k, l]) => (
+        {tabs.map(([k, l]) => (
           <a key={k} href={`/admin?tab=${k}`} aria-current={tab === k ? "page" : undefined}>{l}</a>
         ))}
       </nav>
@@ -194,7 +209,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             <h2>{staff.length} staff</h2>
             <div className="table-wrap">
               <table className="data">
-                <thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Role</th><th><span className="sr-only">Status</span></th></tr></thead>
+                <thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Role</th>{actor.allCampuses && <th>Campus</th>}<th><span className="sr-only">Status</span></th></tr></thead>
                 <tbody>
                   {staff.map((s) => (
                     <tr key={s.id}>
@@ -202,6 +217,19 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                       <td className="small">{s.email}</td>
                       <td>{s.department}</td>
                       <td>{s.role}</td>
+                      {actor.allCampuses && (
+                        <td>
+                          <form action={setStaffCampus} className="btn-row">
+                            <input type="hidden" name="id" value={s.id} />
+                            <label className="sr-only" htmlFor={`sc-${s.id}`}>Campus for {s.name}</label>
+                            <select id={`sc-${s.id}`} name="campusId" defaultValue={s.campusId}>
+                              {campuses.filter((c) => c.active || c.id === s.campusId).map((c) => <option key={c.id} value={c.id}>{c.short_name || c.name}</option>)}
+                            </select>
+                            <label className="small"><input type="checkbox" name="allCampuses" defaultChecked={s.allCampuses} /> All campuses</label>
+                            <button className="btn btn-sm" type="submit">Save</button>
+                          </form>
+                        </td>
+                      )}
                       <td>
                         <form action={setStaffActive}>
                           <input type="hidden" name="id" value={s.id} />
@@ -253,16 +281,47 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </section>
       )}
 
+      {tab === "curriculum" && <CurriculumTab />}
       {tab === "bookings" && <BookingsTab />}
       {tab === "issues" && <IssuesPanel db={db} resources={resources} back="/admin?tab=issues" today={today} />}
       {tab === "qr" && <QrTab />}
       {tab === "system" && <SystemTab down={settings.mockCalendarDown} />}
       {tab === "audit" && <AuditTab />}
+      {tab === "campuses" && actor.allCampuses && (
+        <div className="cols">
+          <section className="stack">
+            <p className="muted">Each campus has its own labs, in-charges, timetables and blackout dates. The booking rules on the Rules tab apply to every campus. Switch campus in the top bar to manage its labs.</p>
+            {campuses.map((c) => (
+              <form key={c.id} action={saveCampus} className="panel">
+                <input type="hidden" name="id" value={c.id} />
+                <div className="row2">
+                  <div className="field"><label htmlFor={`cn-${c.id}`}>Name</label><input id={`cn-${c.id}`} name="name" type="text" defaultValue={c.name} required /></div>
+                  <div className="field"><label htmlFor={`cs-${c.id}`}>Short name</label><input id={`cs-${c.id}`} name="shortName" type="text" defaultValue={c.short_name} /></div>
+                </div>
+                <div className="btn-row">
+                  <label className="small"><input type="checkbox" name="active" defaultChecked={c.active} /> Open for booking</label>
+                  <span className="small muted">{allResources.filter((r) => r.campusId === c.id && r.active).length} labs · {allStaff.filter((s) => s.campusId === c.id && s.active).length} staff</span>
+                  <button className="btn btn-sm" type="submit">Save</button>
+                </div>
+              </form>
+            ))}
+          </section>
+          <section className="panel">
+            <h2>Add a campus</h2>
+            <p className="small muted">It starts with the standard timetable. Then switch to it in the top bar, add its labs and in-charges, and import its staff.</p>
+            <form action={addCampus}>
+              <div className="field"><label htmlFor="nc-name">Name</label><input id="nc-name" name="name" type="text" required placeholder="e.g. Fortes Education campus" /></div>
+              <div className="field"><label htmlFor="nc-short">Short name</label><input id="nc-short" name="shortName" type="text" /></div>
+              <button className="btn btn-primary" type="submit">Add campus</button>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
   );
 
   async function BlackoutsTab({ today, resources }: { today: string; resources: { id: string; name: string }[] }) {
-    const list = (await getBlackouts(db, addDays(today, -30), addDays(today, 365))).sort((a, b) => a.dateFrom.localeCompare(b.dateFrom));
+    const list = (await getBlackouts(db, addDays(today, -30), addDays(today, 365))).filter((b) => b.campusId === campus).sort((a, b) => a.dateFrom.localeCompare(b.dateFrom));
     return (
       <div className="cols">
         <section>
@@ -385,9 +444,77 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     );
   }
 
+  async function CurriculumTab() {
+    const levels = await db.query<{ id: string; code: string; strand: string; title: string; year_group: string; active: boolean; used: number }>(
+      `SELECT l.*, (SELECT count(*)::int FROM bookings b WHERE l.id = ANY(b.curriculum_ids) AND b.status IN ('confirmed','completed','no_show')) AS used
+         FROM curriculum_levels l ORDER BY l.active DESC, l.sort, l.code`,
+    );
+    const sample = (await db.query("SELECT 1 FROM meta WHERE key = 'curriculum_sample'")).length > 0;
+    return (
+      <div className="stack">
+        {sample && (
+          <div className="notice notice-warn" role="note">
+            These are <strong>sample levels</strong> so curriculum mapping can be tried. Import the school&rsquo;s KS3 progressive plan below (tick &ldquo;Replace&rdquo;) before teachers tag real lessons.
+          </div>
+        )}
+        <p className="muted">Teachers can tag a booking with up to 5 levels. The Reports page shows how often each level was taught and which have not been covered yet.</p>
+        <div className="table-wrap">
+          <table className="data">
+            <thead><tr><th>Code</th><th>Strand</th><th>Level</th><th>Year</th><th className="num">Sessions</th><th>In use</th><th><span className="sr-only">Save</span></th></tr></thead>
+            <tbody>
+              {levels.map((l) => {
+                const f = `lvl-${l.id}`;
+                return (
+                  <tr key={l.id}>
+                    <td><input form={f} name="code" type="text" defaultValue={l.code} aria-label={`Code for ${l.code}`} style={{ width: 80 }} /></td>
+                    <td><input form={f} name="strand" type="text" defaultValue={l.strand} aria-label={`Strand for ${l.code}`} style={{ minWidth: 140 }} /></td>
+                    <td><input form={f} name="title" type="text" defaultValue={l.title} aria-label={`Description for ${l.code}`} style={{ minWidth: 220 }} /></td>
+                    <td><input form={f} name="yearGroup" type="text" defaultValue={l.year_group} aria-label={`Year group for ${l.code}`} style={{ width: 60 }} /></td>
+                    <td className="num">{l.used}</td>
+                    <td><input form={f} name="active" type="checkbox" defaultChecked={l.active} aria-label={`${l.code} in use`} style={{ width: 20, height: 20 }} /></td>
+                    <td><form id={f} action={saveLevel}><input type="hidden" name="id" value={l.id} /><button className="btn btn-sm" type="submit">Save</button></form></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="cols">
+          <section className="panel">
+            <h2>Add a level</h2>
+            <form action={addLevel}>
+              <div className="row2">
+                <div className="field"><label htmlFor="nl-code">Code</label><input id="nl-code" name="code" type="text" required placeholder="e.g. PR-8" /></div>
+                <div className="field"><label htmlFor="nl-year">Year group</label><input id="nl-year" name="yearGroup" type="text" placeholder="e.g. Y8" /></div>
+              </div>
+              <div className="field"><label htmlFor="nl-strand">Strand</label><input id="nl-strand" name="strand" type="text" required placeholder="e.g. Programming" /></div>
+              <div className="field"><label htmlFor="nl-title">Level</label><input id="nl-title" name="title" type="text" required placeholder="What students can do at this level" /></div>
+              <button className="btn btn-primary" type="submit">Add level</button>
+            </form>
+          </section>
+          <section className="panel">
+            <h2>Import the plan</h2>
+            <p className="small muted">Paste CSV with one level per line: code, strand, level, year. A header line is fine. Existing codes are updated.</p>
+            <form action={importLevels}>
+              <div className="field">
+                <label htmlFor="il-csv">CSV</label>
+                <textarea id="il-csv" name="csv" rows={6} required placeholder={"code,strand,title,year\nPR-8,Programming,Move from blocks to text-based code,Y8"} />
+              </div>
+              <label className="small" style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 44 }}>
+                <input type="checkbox" name="replace" defaultChecked={sample} style={{ width: 20, height: 20 }} /> Replace: retire every level that is not in this file
+              </label>
+              <button className="btn btn-primary" type="submit">Import</button>
+            </form>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
   async function BookingsTab() {
-    const list = await listBookings(db, { from: today, to: addDays(today, settings.maxLeadDays + 7), status: ["confirmed"] });
-    const people = staff.filter((s) => s.active && (s.role === "incharge" || s.role === "admin"));
+    const ids = new Set(resources.map((r) => r.id));
+    const list = (await listBookings(db, { from: today, to: addDays(today, settings.maxLeadDays + 7), status: ["confirmed"] })).filter((b) => ids.has(b.resourceId));
+    const people = incharges;
     return (
       <div className="stack">
         <p className="muted">Move a booking to another in-charge. &ldquo;Whoever is free&rdquo; tries the usual pair first. The teacher and both in-charges are emailed and calendars are updated.</p>
@@ -431,7 +558,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
   async function QrTab() {
     await ensureCheckinCodes(db);
-    const rows = (await getResources(db)).filter((r) => r.active && r.type === "room" && r.checkinCode);
+    const rows = (await getResources(db)).filter((r) => r.campusId === campus && r.active && r.type === "room" && r.checkinCode);
     const appUrl = process.env.APP_URL ?? "http://localhost:3000";
     const codes = await Promise.all(rows.map(async (r) => ({ r, url: `${appUrl}/checkin/${r.checkinCode}`, svg: await QRCode.toString(`${appUrl}/checkin/${r.checkinCode}`, { type: "svg", margin: 1, errorCorrectionLevel: "M" }) })));
     return (

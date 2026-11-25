@@ -3,7 +3,7 @@ import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import * as z from "zod/v4";
 import type { Db } from "@sunmarke/db";
 import { book, cancel, context, free, mine, rules, waitlistCard, who, type AssistantReply, type Draft, type History } from "./assistant";
-import type { Actor } from "./bookings";
+import { campusOf, type Actor } from "./bookings";
 import { fmtDateLong } from "../shared/format";
 
 /**
@@ -25,7 +25,7 @@ const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("School day as YYYY
 const Blocks = z.array(z.string().regex(/^[A-Za-z0-9]{1,10}$/)).min(1).max(3).describe('Period codes such as ["P3"] or ["P3","P4"] for a double.');
 
 export async function askClaude(db: Db, actor: Actor, message: string, history: History): Promise<AssistantReply> {
-  const ctx = await context(db);
+  const ctx = await context(db, campusOf(actor));
   // Cards produced by tools in this turn; the latest of each kind is shown under Claude's answer.
   const cards: AssistantReply = { text: [] };
   const keep = (r: AssistantReply) => {

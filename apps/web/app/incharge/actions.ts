@@ -8,7 +8,7 @@ import { getDb } from "@/lib/server/db";
 import { audit } from "@/lib/server/audit";
 import { addExternalEvent } from "@/lib/server/calendar";
 import { newId } from "@/lib/server/util";
-import { AppError } from "@/lib/server/bookings";
+import { AppError, campusOf } from "@/lib/server/bookings";
 import { addAbsence, removeAbsence, reportIssue, resolveIssue } from "@/lib/server/release11";
 import { IssueInput } from "@/lib/shared/schemas";
 
@@ -36,10 +36,14 @@ export async function blockTime(fd: FormData) {
   if (!p.success) redirect(`${back}${back.includes("?") ? "&" : "?"}error=${encodeURIComponent(p.error.issues[0].message)}`);
   const d = p.data;
   const db = await getDb();
+  if (d.resourceId !== "all") {
+    const own = await db.query("SELECT 1 FROM resources WHERE id = $1 AND campus_id = $2", [d.resourceId, campusOf(actor)]);
+    if (!own.length) redirect(`${back}${back.includes("?") ? "&" : "?"}error=${encodeURIComponent("That lab belongs to another campus.")}`);
+  }
   const id = newId("bo");
   const dateTo = d.dateTo && d.dateTo >= d.dateFrom ? d.dateTo : d.dateFrom;
-  await db.query("INSERT INTO blackouts (id, resource_id, date_from, date_to, block_codes, reason, note, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)", [
-    id, d.resourceId === "all" ? null : d.resourceId, d.dateFrom, dateTo, d.blocks.length ? d.blocks : null, d.reason, d.note, actor.id,
+  await db.query("INSERT INTO blackouts (id, resource_id, date_from, date_to, block_codes, reason, note, created_by, campus_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)", [
+    id, d.resourceId === "all" ? null : d.resourceId, d.dateFrom, dateTo, d.blocks.length ? d.blocks : null, d.reason, d.note, actor.id, campusOf(actor),
   ]);
   await audit(db, { actorId: actor.id, action: "blackout.create", entity: "blackout", entityId: id, after: d });
   revalidatePath("/");

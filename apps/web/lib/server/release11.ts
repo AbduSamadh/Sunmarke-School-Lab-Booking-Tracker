@@ -6,7 +6,7 @@
 import { randomBytes } from "node:crypto";
 import type { Db } from "@sunmarke/db";
 import { isUniqueViolation } from "@sunmarke/db";
-import { addDays, canCover, evaluate, findCover, localDate, recurringDates, timetableForDate } from "@sunmarke/rules";
+import { addDays, canCover, evaluate, findCover, localDate, recurringDates, timetableForDate, blockOn } from "@sunmarke/rules";
 import type { IssueInput, SeriesInput } from "../shared/schemas";
 import { audit } from "./audit";
 import { AppError, cancelBooking, createBooking, getBookingDetail, listBookings, type Actor, type BookingDetail } from "./bookings";
@@ -96,7 +96,7 @@ async function coverAbsence(db: Db, actor: Actor, a: AbsenceInput) {
   const affected = (await listBookings(db, { inchargeId: a.staffId, from: a.dateFrom, to: a.dateTo, status: ["confirmed"] })).filter((b) => {
     if (b.end.getTime() < now().getTime()) return false;
     if (!a.blockCodes) return true;
-    const codes = b.blockIds.map((id) => timetableForDate(tts, b.date)?.blocks.find((x) => x.id === id)?.code);
+    const codes = b.blockIds.map((id) => blockOn(tts, b.date, id)?.code);
     return codes.some((c) => c && a.blockCodes!.includes(c));
   });
   const reassigned: string[] = [];
@@ -148,11 +148,12 @@ export async function planSeries(db: Db, actor: Actor, input: SeriesInput): Prom
   if (input.onBehalfOf && actor.role !== "admin") throw new AppError(403, "forbidden", "Only the lab admin can book for someone else.");
   if (input.endDate < input.startDate) throw new AppError(422, "invalid", "The end date is before the start date.");
   const dates = recurringDates(input.startDate, input.endDate, input.everyWeeks);
+  const campus = (await db.query<{ campus_id: string }>("SELECT campus_id FROM resources WHERE id = $1", [input.resourceId]))[0]?.campus_id;
   const tts = await getTimetables(db);
   const t = now();
   const teacherId = input.onBehalfOf ?? actor.id;
   const resolve = (date: string) => {
-    const tt = timetableForDate(tts, date);
+    const tt = timetableForDate(tts, date, campus);
     const ids = input.blockCodes.map((c) => tt?.blocks.find((b) => b.code === c && b.bookable)?.id);
     return ids.every(Boolean) ? (ids as string[]) : null;
   };
@@ -190,7 +191,7 @@ export async function planSeries(db: Db, actor: Actor, input: SeriesInput): Prom
       {
         resourceId: input.resourceId, date, blockIds, subject: input.subject, yearGroup: input.yearGroup, section: input.section,
         studentCount: input.studentCount, cartCount: input.cartCount, classroom: input.classroom, objective: input.objective,
-        specialRequirements: input.specialRequirements, lessonPlanUrl: "",
+        specialRequirements: input.specialRequirements, lessonPlanUrl: "", curriculumIds: input.curriculumIds,
       },
       { onBehalfOf: input.onBehalfOf, recurrenceId, runJobsNow: false },
     );

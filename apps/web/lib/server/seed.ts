@@ -35,6 +35,26 @@ const SUBJECTS = ["Science", "Physics", "Chemistry", "Biology", "Computing", "Ma
 const YEARS = ["FS1", "FS2", ...Array.from({ length: 13 }, (_, i) => `Y${i + 1}`)];
 const SECTIONS = ["A", "B", "C", "D", "E", "F"];
 
+/**
+ * SAMPLE KS3 levels so curriculum mapping can be tried. They are placeholders,
+ * not Sunmarke's KS3 progressive plan: the lab admin replaces them in Admin ›
+ * Curriculum (or imports the real plan as CSV) before tagging real lessons.
+ */
+export const SAMPLE_CURRICULUM: [code: string, strand: string, title: string, year: string][] = [
+  ["CT-7", "Computational thinking", "Break a problem into steps and draw it as a flowchart", "Y7"],
+  ["PR-7", "Programming", "Write and debug a short block-based program", "Y7"],
+  ["AI-7", "AI and data", "Sort and label data to train a simple classifier", "Y7"],
+  ["DM-7", "Digital making", "Build and test a simple circuit", "Y7"],
+  ["CT-8", "Computational thinking", "Use selection and loops to solve a problem", "Y8"],
+  ["PR-8", "Programming", "Move from blocks to text-based code", "Y8"],
+  ["AI-8", "AI and data", "Spot bias in a data set and explain its effect", "Y8"],
+  ["DM-8", "Digital making", "Program a microcontroller to read a sensor", "Y8"],
+  ["CT-9", "Computational thinking", "Compare two algorithms for the same task", "Y9"],
+  ["PR-9", "Programming", "Write functions and test them with sample data", "Y9"],
+  ["AI-9", "AI and data", "Evaluate an AI tool's output and its limits", "Y9"],
+  ["DM-9", "Digital making", "Design, build and present a working prototype", "Y9"],
+];
+
 export async function seed(db: Db) {
   for (const s of STAFF)
     await db.query("INSERT INTO staff (id, name, email, department, role) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", [...s]);
@@ -53,6 +73,12 @@ export async function seed(db: Db) {
   await db.query("INSERT INTO settings VALUES ('mock_calendar_down', 'false') ON CONFLICT DO NOTHING");
   for (const [kind, list] of [["subject", SUBJECTS], ["year_group", YEARS], ["section", SECTIONS]] as const)
     for (const [i, v] of list.entries()) await db.query("INSERT INTO lookups VALUES ($1,$2,$3) ON CONFLICT DO NOTHING", [kind, v, i]);
+
+  for (const [i, [code, strand, title, year]] of SAMPLE_CURRICULUM.entries())
+    await db.query("INSERT INTO curriculum_levels (id, code, strand, title, year_group, sort) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING", [`cl-${code.toLowerCase()}`, code, strand, title, year, i]);
+  await db.query("INSERT INTO meta VALUES ('curriculum_sample', 'true') ON CONFLICT DO NOTHING");
+  // Abd (lab admin) and Dr. Neil (leadership) can see every campus once there is more than one.
+  await db.query("UPDATE staff SET all_campuses = true WHERE id IN ('abd', 'neil')");
 
   await seedHistory(db);
   await seedUpcoming(db);
@@ -125,11 +151,11 @@ async function seedHistory(db: Db) {
         const subject = SUBJECTS[Math.floor(rnd() * 8)];
         const year = YEARS[3 + Math.floor(rnd() * 11)];
         await db.query(
-          `INSERT INTO bookings (id, resource_id, date, block_ids, teacher_id, incharge_id, subject, year_group, section, student_count, cart_count, classroom, status, cross_cover, created_by, created_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$5,$15)`,
+          `INSERT INTO bookings (id, resource_id, date, block_ids, teacher_id, incharge_id, subject, year_group, section, student_count, cart_count, classroom, status, cross_cover, created_by, created_at, curriculum_ids)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$5,$15,$16)`,
           [id, resourceId, date, [P(block)], teacher, ev.inchargeId, subject, year, SECTIONS[Math.floor(rnd() * 4)], 18 + Math.floor(rnd() * 10),
             resourceId === "carts" ? units : null, resourceId === "carts" ? `Room ${1 + Math.floor(rnd() * 3)}.${10 + Math.floor(rnd() * 9)}` : null, status, ev.crossCover,
-            new Date(fakeNow.getTime() - Math.floor(rnd() * 10) * 86_400_000).toISOString()],
+            new Date(fakeNow.getTime() - Math.floor(rnd() * 10) * 86_400_000).toISOString(), sampleLevels(year, id)],
         );
         if (status !== "cancelled") {
           await db.query("INSERT INTO booking_slots (booking_id, incharge_id, resource_id, room_key, date, block_id, units) VALUES ($1,$2,$3,$4,$5,$6,$7)", [
@@ -167,4 +193,12 @@ async function seedHistory(db: Db) {
       [newId("iss"), new Date(now().getTime() - 86_400_000).toISOString()],
     );
   }
+}
+
+/** Tag some past KS3 lessons with a sample level, so the coverage report has data. */
+function sampleLevels(year: string, id: string): string[] {
+  const levels = SAMPLE_CURRICULUM.filter((c) => c[3] === year);
+  if (!levels.length) return [];
+  const h = [...id].reduce((n, ch) => (n * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  return h % 4 === 0 ? [] : [`cl-${levels[h % levels.length][0].toLowerCase()}`];
 }

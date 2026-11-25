@@ -1,7 +1,7 @@
 import { addDays, localDate } from "@sunmarke/rules";
 import { requireActor } from "@/lib/server/auth";
 import { getDb } from "@/lib/server/db";
-import { buildReport } from "@/lib/server/reports";
+import { buildReport, reportCampus } from "@/lib/server/reports";
 import { getSettings } from "@/lib/server/world";
 import { now } from "@/lib/server/util";
 import { fmtDateShort } from "@/lib/shared/format";
@@ -12,18 +12,21 @@ import { CalendarCheck, Gauge, Laptop, Ban, Users, UserX, Hourglass, Star, type 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 
-export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; resource?: string; department?: string }> }) {
-  await requireActor(["admin", "viewer"]);
+export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; resource?: string; department?: string; campus?: string }> }) {
+  const actor = await requireActor(["admin", "viewer"]);
   const db = await getDb();
   const sp = await searchParams;
   const today = localDate(now(), await getSettings(db));
   const valid = (d?: string) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined);
   const from = valid(sp.from) ?? addDays(today, -28);
   const to = valid(sp.to) ?? addDays(today, -1);
-  const rep = await buildReport(db, { from, to, resourceId: sp.resource || undefined, department: sp.department || undefined });
-  const qs = new URLSearchParams({ from, to, ...(sp.resource ? { resource: sp.resource } : {}), ...(sp.department ? { department: sp.department } : {}) }).toString();
+  const campusId = reportCampus(actor, sp.campus);
+  const campuses = actor.allCampuses ? await db.query<{ id: string; name: string }>("SELECT id, name FROM campuses WHERE active ORDER BY sort, name") : [];
+  const rep = await buildReport(db, { from, to, resourceId: sp.resource || undefined, department: sp.department || undefined, campusId });
+  const qs = new URLSearchParams({ from, to, ...(sp.resource ? { resource: sp.resource } : {}), ...(sp.department ? { department: sp.department } : {}), ...(actor.allCampuses ? { campus: campusId ?? "all" } : {}) }).toString();
   const heatMax = Math.max(1, ...Object.values(rep.heat).flatMap((r) => Object.values(r)));
   const deptMax = Math.max(1, ...rep.byDepartment.map((d) => d.n));
+  const curMax = Math.max(1, ...rep.curriculum.levels.map((l) => l.sessions));
 
   return (
     <div>
@@ -41,6 +44,15 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       <form className="filters no-print" method="get">
         <div className="field"><label htmlFor="f-from">From</label><input id="f-from" name="from" type="date" defaultValue={from} /></div>
         <div className="field"><label htmlFor="f-to">To</label><input id="f-to" name="to" type="date" defaultValue={to} /></div>
+        {campuses.length > 1 && (
+          <div className="field">
+            <label htmlFor="f-campus">Campus</label>
+            <select id="f-campus" name="campus" defaultValue={campusId ?? "all"}>
+              <option value="all">All campuses</option>
+              {campuses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        )}
         <div className="field">
           <label htmlFor="f-res">Lab</label>
           <select id="f-res" name="resource" defaultValue={sp.resource ?? ""}><option value="">All</option>{rep.resources.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
@@ -176,6 +188,50 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           </p>
         </section>
       </div>
+
+      <section style={{ marginTop: 20 }} aria-labelledby="cur-title">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+          <h2 id="cur-title">Curriculum coverage</h2>
+          <a className="small" href={`/api/v1/reports/export?table=curriculum&${qs}`}>CSV</a>
+        </div>
+        {rep.curriculum.total === 0 ? (
+          <div className="empty">No curriculum levels yet. Add the KS3 progressive plan under Admin, Curriculum.</div>
+        ) : (
+          <>
+            <p className="muted" style={{ marginTop: 0 }}>
+              {rep.curriculum.covered} of {rep.curriculum.total} levels taught in the labs in this range, from {rep.curriculum.taggedSessions} tagged {rep.curriculum.taggedSessions === 1 ? "session" : "sessions"}.
+            </p>
+            <div className="table-wrap">
+              <table className="data">
+                <thead><tr><th>Level</th><th>Year</th><th style={{ width: "34%" }}>Sessions</th><th className="num">Classes</th></tr></thead>
+                {[...new Set(rep.curriculum.levels.map((l) => l.strand))].map((strand) => (
+                  <tbody key={strand}>
+                    <tr><th scope="rowgroup" colSpan={4} style={{ background: "var(--surface-2)" }}>{strand}</th></tr>
+                    {rep.curriculum.levels.filter((l) => l.strand === strand).map((l) => (
+                      <tr key={l.id}>
+                        <td><strong>{l.code}</strong> <span className="small">{l.title}</span></td>
+                        <td>{l.yearGroup || "All"}</td>
+                        <td>
+                          {l.sessions === 0 ? (
+                            <span className="small muted">Not taught yet</span>
+                          ) : (
+                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                              <div className="bar" style={{ flex: 1 }}><span style={{ width: pct(l.sessions / curMax), background: "var(--accent)" }} /></div>
+                              <span className="tnum small" style={{ width: 28, textAlign: "end" }}>{l.sessions}</span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="num">{l.classes}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                ))}
+              </table>
+            </div>
+            <p className="small muted" style={{ marginTop: 6 }}>Teachers tag lessons with plan levels when they book. Untagged sessions are not counted here.</p>
+          </>
+        )}
+      </section>
 
       <section style={{ marginTop: 20 }}>
         <h2>Teacher ratings and equipment</h2>
