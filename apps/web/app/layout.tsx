@@ -12,6 +12,8 @@ import { Motion } from "@/components/Motion";
 import { Assistant } from "@/components/Assistant";
 import { Avatar, Logo } from "@/components/LabIcon";
 import { cookies } from "next/headers";
+import { getDb } from "@/lib/server/db";
+import { Building2 } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Sunmarke Lab Booking",
@@ -26,6 +28,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const actor = await currentActor();
   const pref = (await cookies()).get("slb_theme")?.value;
   const theme = pref === "dark" || pref === "light" ? pref : null;
+  // Release 2: group admins and leadership can switch campus once there is more than one.
+  const campuses = actor?.allCampuses
+    ? await (await getDb()).query<{ id: string; name: string; short_name: string }>("SELECT id, name, short_name FROM campuses WHERE active ORDER BY sort, name")
+    : [];
   return (
     <html lang="en-GB" data-theme={theme ?? undefined} suppressHydrationWarning>
       <body>
@@ -41,6 +47,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </a>
             {actor && <Nav role={actor.role} />}
             {!actor && <div style={{ flex: 1 }} />}
+            {campuses.length > 1 && actor && (
+              <form className="campus-switch" action="/api/v1/campus" method="post">
+                <Building2 size={16} aria-hidden="true" />
+                <label className="sr-only" htmlFor="campus-pick">Campus</label>
+                <select id="campus-pick" name="campusId" defaultValue={actor.campusId}>
+                  {campuses.map((c) => <option key={c.id} value={c.id}>{c.short_name || c.name}</option>)}
+                </select>
+                <button className="btn btn-quiet btn-sm" type="submit">Switch</button>
+              </form>
+            )}
             <ThemeToggle initial={theme} />
             {actor && (
               <div className="who">

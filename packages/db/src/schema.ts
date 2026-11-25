@@ -286,8 +286,6 @@ ALTER TABLE timetables ADD COLUMN IF NOT EXISTS campus_id text NOT NULL DEFAULT 
 ALTER TABLE blackouts ADD COLUMN IF NOT EXISTS campus_id text NOT NULL DEFAULT 'sunmarke' REFERENCES campuses(id);
 -- Group admins (Fortes) see and manage every campus; everyone else sees their own.
 ALTER TABLE staff ADD COLUMN IF NOT EXISTS all_campuses boolean NOT NULL DEFAULT false;
--- Arabic UI: preferred language per person (cookie wins on a shared device).
-ALTER TABLE staff ADD COLUMN IF NOT EXISTS locale text NOT NULL DEFAULT 'en' CHECK (locale IN ('en','ar'));
 
 -- Curriculum mapping: the KS3 progressive plan, as admin-editable levels.
 CREATE TABLE IF NOT EXISTS curriculum_levels (

@@ -29,8 +29,6 @@ export interface Actor {
   homeCampusId?: string;
   /** Group admins and leadership who may switch between campuses. */
   allCampuses?: boolean;
-  /** Preferred UI language. */
-  locale?: "en" | "ar";
 }
 
 export const DEFAULT_CAMPUS = "sunmarke";

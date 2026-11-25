@@ -385,3 +385,7 @@ h1, h2, h3, .display { font-weight: 700; }
 .chip-check.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
 .chip-check:has(input:disabled) { opacity: 0.6; cursor: not-allowed; }
 .chip-check:focus-within { box-shadow: var(--focus); }
+
+/* Release 2: campus switch in the top bar (group admins only) */
+.campus-switch { display: flex; align-items: center; gap: 6px; }
+.campus-switch select { min-height: 36px; max-width: 160px; }

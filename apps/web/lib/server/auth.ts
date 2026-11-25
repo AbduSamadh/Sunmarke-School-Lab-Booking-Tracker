@@ -44,8 +44,8 @@ export function readToken(token: string | undefined): string | null {
 
 export async function actorById(db: Db, id: string | null, campusChoice?: string | null): Promise<Actor | null> {
   if (!id) return null;
-  const r = await db.query<Actor & { active: boolean; campus_id: string; all_campuses: boolean; locale: "en" | "ar" }>(
-    "SELECT id, name, email, role, department, active, campus_id, all_campuses, locale FROM staff WHERE id = $1",
+  const r = await db.query<Actor & { active: boolean; campus_id: string; all_campuses: boolean }>(
+    "SELECT id, name, email, role, department, active, campus_id, all_campuses FROM staff WHERE id = $1",
     [id],
   );
   const s = r[0];
@@ -56,7 +56,7 @@ export async function actorById(db: Db, id: string | null, campusChoice?: string
     const ok = await db.query("SELECT 1 FROM campuses WHERE id = $1 AND active", [campusChoice]);
     if (ok.length) campusId = campusChoice;
   }
-  return { id: s.id, name: s.name, email: s.email, role: s.role, department: s.department, campusId, homeCampusId: s.campus_id, allCampuses: s.all_campuses, locale: s.locale };
+  return { id: s.id, name: s.name, email: s.email, role: s.role, department: s.department, campusId, homeCampusId: s.campus_id, allCampuses: s.all_campuses };
 }
 
 export async function signInByEmail(db: Db, email: string): Promise<{ ok: true; actor: Actor } | { ok: false; message: string }> {

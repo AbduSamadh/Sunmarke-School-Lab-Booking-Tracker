@@ -81,7 +81,7 @@ describe("curriculum mapping", () => {
     const r = await createBooking(db, sara, { ...base, resourceId: "quantum", date: TUE, blockIds: [P("P3")] });
     if (!r.ok) throw new Error(r.reason);
     const b = await updateBooking(db, sara, r.booking.id, { curriculumIds: ["cl-dm-8"] });
-    expect(b.curriculumIds).toEqual(["cl-dm-8"]);
+    expect(b?.curriculumIds).toEqual(["cl-dm-8"]);
   });
 });
 
