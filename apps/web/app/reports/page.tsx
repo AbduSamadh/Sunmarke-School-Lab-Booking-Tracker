@@ -5,6 +5,7 @@ import { buildReport } from "@/lib/server/reports";
 import { getSettings } from "@/lib/server/world";
 import { now } from "@/lib/server/util";
 import { fmtDateShort } from "@/lib/shared/format";
+import { PrintButton } from "@/components/PrintButton";
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
@@ -29,10 +30,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <h1>Lab use</h1>
           <p className="muted" style={{ margin: 0 }}>{fmtDateShort(from)} to {fmtDateShort(to)}. Utilisation counts bookable blocks only, excluding blackouts.</p>
         </div>
-        <a className="btn" href={`/api/v1/reports/export?table=bookings&${qs}`}>Export bookings (CSV)</a>
+        <div className="btn-row no-print">
+          <PrintButton label="Print or save as PDF" />
+          <a className="btn" href={`/api/v1/reports/export?table=bookings&${qs}`}>Export bookings (CSV)</a>
+        </div>
       </div>
 
-      <form className="filters" method="get">
+      <form className="filters no-print" method="get">
         <div className="field"><label htmlFor="f-from">From</label><input id="f-from" name="from" type="date" defaultValue={from} /></div>
         <div className="field"><label htmlFor="f-to">To</label><input id="f-to" name="to" type="date" defaultValue={to} /></div>
         <div className="field">
@@ -54,6 +58,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <Kpi v={String(rep.kpis.teachers)} l="Teachers booking" />
         <Kpi v={pct(rep.kpis.noShowRate)} l="No-show rate" />
         <Kpi v={`${rep.kpis.medianLeadDays.toFixed(1)} d`} l="Median booking lead time" />
+        <Kpi v={rep.feedback.count ? `${rep.feedback.avg.toFixed(1)} / 5` : "–"} l={`Session rating${rep.feedback.count ? ` (${rep.feedback.count})` : ""}`} />
       </div>
 
       <div className="cols">
@@ -169,8 +174,32 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           </p>
         </section>
       </div>
+
+      <section style={{ marginTop: 20 }}>
+        <h2>Teacher ratings and equipment</h2>
+        <div className="table-wrap">
+          <table className="data">
+            <thead><tr><th>Lab</th><th>Average rating</th><th className="num">Equipment issues</th><th className="num">Still open</th></tr></thead>
+            <tbody>
+              {rep.feedback.byResource.filter((r) => !sp.resource || r.id === sp.resource).map((r) => (
+                <tr key={r.id}>
+                  <td>{r.name}</td>
+                  <td>{ratingText(r.avg, r.ratings)}</td>
+                  <td className="num">{r.issues}</td>
+                  <td className="num">{r.openIssues}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="small muted" style={{ marginTop: 6 }}>Teachers rate a session from their bookings page after it starts. Open issues are listed under Admin, Equipment.</p>
+      </section>
     </div>
   );
+}
+
+function ratingText(avg: number | null, n: number) {
+  return avg === null ? "No ratings" : `${avg.toFixed(1)} / 5 (${n})`;
 }
 
 function Kpi({ v, l }: { v: string; l: string }) {

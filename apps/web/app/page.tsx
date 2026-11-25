@@ -28,8 +28,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
     [actor.id],
   );
 
+  const people =
+    actor.role === "admin"
+      ? await db.query<{ id: string; name: string; department: string }>("SELECT id, name, department FROM staff WHERE active AND role IN ('teacher','incharge','admin') ORDER BY name")
+      : [];
+
   return (
     <Availability
+      people={people}
+      selfId={actor.id}
       grid={grid}
       date={date}
       today={today}

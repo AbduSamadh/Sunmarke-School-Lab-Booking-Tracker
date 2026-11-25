@@ -88,6 +88,16 @@ export interface RuleSettings {
   maxLeadDays: number; // D6: 28
   cancelCutoffHours: number; // D6: 2
   maxCartsPerBooking: number; // D4: 10
+  /** Fair-use quota: most lab blocks one teacher may hold in a school week. 0 = no limit. */
+  quotaPerTeacherWeek: number;
+  /** Fair-use quota: most lab blocks one department may hold in a school week. 0 = no limit. */
+  quotaPerDeptWeek: number;
+  /** Hours a waitlisted teacher has to take a freed slot before it goes to the next. */
+  waitlistHoldHours: number;
+  /** Minutes after the start with no check-in before a lab booking is marked no-show. 0 = off. */
+  autoNoShowMinutes: number;
+  /** How far ahead a recurring series may book (about a term). */
+  recurringMaxDays: number;
 }
 
 export const DEFAULT_SETTINGS: RuleSettings = {
@@ -96,6 +106,11 @@ export const DEFAULT_SETTINGS: RuleSettings = {
   maxLeadDays: 28,
   cancelCutoffHours: 2,
   maxCartsPerBooking: 10,
+  quotaPerTeacherWeek: 0,
+  quotaPerDeptWeek: 0,
+  waitlistHoldHours: 2,
+  autoNoShowMinutes: 10,
+  recurringMaxDays: 120,
 };
 
 export interface WorldState {
@@ -107,6 +122,34 @@ export interface WorldState {
   blackouts: Blackout[];
   busy: BusyInterval[];
   settings: RuleSettings;
+  /** Freed slots held for a waitlisted teacher until expiresAt. */
+  offers?: WaitlistOffer[];
+  /** In-charge leave or absence (R1.1 leave and cover). */
+  absences?: Absence[];
+}
+
+export interface WaitlistOffer {
+  resourceId: string;
+  date: ISODate;
+  blockId: string;
+  teacherId: string;
+  units: number;
+  expiresAt: Date;
+}
+
+export interface Absence {
+  id: string;
+  staffId: string;
+  dateFrom: ISODate;
+  dateTo: ISODate;
+  blockCodes: string[] | null; // null = whole day
+  reason: string;
+}
+
+/** Blocks already booked in the same school week, for the fair-use quota. */
+export interface QuotaUsage {
+  teacherWeek: number;
+  deptWeek: number;
 }
 
 export interface BookingRequest {
@@ -121,6 +164,12 @@ export interface BookingRequest {
   overrideWindow?: boolean;
   /** When editing/rebooking, ignore this booking's own holds and calendar events. */
   ignoreBookingId?: string;
+  /** Who the booking is for; needed for waitlist holds. */
+  teacherId?: string;
+  /** Current week usage; when given, the fair-use quota is enforced. */
+  usage?: QuotaUsage;
+  /** Recurring series may reach further ahead than single bookings (settings.recurringMaxDays). */
+  recurring?: boolean;
 }
 
 export type BlockedCode =
@@ -135,6 +184,8 @@ export type BlockedCode =
   | "resource_booked"
   | "not_enough_carts"
   | "invalid_units"
+  | "held_for_waitlist"
+  | "quota_reached"
   | "no_incharge";
 
 export interface Allocation {

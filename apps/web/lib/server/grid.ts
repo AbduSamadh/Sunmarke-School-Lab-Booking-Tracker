@@ -28,7 +28,7 @@ export interface GridDay {
 
 export interface GridData {
   days: GridDay[];
-  resources: { id: string; name: string; type: "room" | "cart_pool"; units: number; colour: string; location: string; capacity: number | null }[];
+  resources: { id: string; name: string; type: "room" | "cart_pool"; units: number; colour: string; location: string; capacity: number | null; links: { label: string; url: string }[] }[];
   calendarChecked: boolean;
 }
 
@@ -47,10 +47,10 @@ export async function getGrid(db: Db, actor: Actor, from: string, to: string): P
       cells[r.id] = {};
       for (const b of blocks) {
         const isAdmin = actor.role === "admin";
-        let st = cellStatus(world, r, d, b, t);
+        let st = cellStatus(world, r, d, b, t, false, actor.id);
         let override = false;
         if (isAdmin && st.state === "unavailable" && (st.code === "window_too_soon" || st.code === "window_too_far")) {
-          st = cellStatus(world, r, d, b, t, true);
+          st = cellStatus(world, r, d, b, t, true, actor.id);
           override = st.state === "free";
         }
         const here = world.holds.filter((h) => h.resourceId === r.id && h.date === d && h.blockId === b.id).map((h) => byId.get(h.bookingId)).filter(Boolean);
@@ -87,7 +87,7 @@ export async function getGrid(db: Db, actor: Actor, from: string, to: string): P
   }
   return {
     days,
-    resources: world.resourceRows.filter((r) => r.active).map((r) => ({ id: r.id, name: r.name, type: r.type, units: r.units, colour: r.colour, location: r.location, capacity: r.capacity })),
+    resources: world.resourceRows.filter((r) => r.active).map((r) => ({ id: r.id, name: r.name, type: r.type, units: r.units, colour: r.colour, location: r.location, capacity: r.capacity, links: r.links ?? [] })),
     calendarChecked: world.calendarChecked,
   };
 }

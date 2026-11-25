@@ -6,6 +6,8 @@ import { getDb } from "@/lib/server/db";
 import { audit } from "@/lib/server/audit";
 import { getSettings } from "@/lib/server/world";
 import { newId } from "@/lib/server/util";
+import { AppError } from "@/lib/server/bookings";
+import { reassignBooking } from "@/lib/server/release11";
 
 const back = (tab: string, q = "saved=1") => redirect(`/admin?tab=${tab}&${q}`);
 const err = (tab: string, m: string) => redirect(`/admin?tab=${tab}&error=${encodeURIComponent(m)}`);
@@ -111,6 +113,11 @@ export async function saveRules(fd: FormData) {
       maxLeadDays: z.coerce.number().int().min(1).max(180),
       cancelCutoffHours: z.coerce.number().int().min(0).max(72),
       maxCartsPerBooking: z.coerce.number().int().min(1).max(50),
+      quotaPerTeacherWeek: z.coerce.number().int().min(0).max(50),
+      quotaPerDeptWeek: z.coerce.number().int().min(0).max(200),
+      waitlistHoldHours: z.coerce.number().int().min(1).max(48),
+      autoNoShowMinutes: z.coerce.number().int().min(0).max(55),
+      recurringMaxDays: z.coerce.number().int().min(7).max(365),
     })
     .safeParse(Object.fromEntries(fd.entries()));
   if (!p.success) return err("rules", p.error.issues[0].message);
@@ -139,4 +146,43 @@ export async function toggleCalendarOutage(fd: FormData) {
   await db.query("INSERT INTO settings VALUES ('mock_calendar_down', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", [JSON.stringify(down)]);
   await audit(db, { actorId: actor.id, action: "settings.mock_calendar_down", entity: "settings", after: { down } });
   back("system");
+}
+
+const Link = z.object({ label: z.string().trim().min(1).max(60), url: z.string().url().refine((u) => /^https?:\/\//i.test(u), "Links must start with http:// or https://") });
+
+/** Lesson resource links per lab, one "Label | https://..." per line. Shown in the booking sheet and the confirmation email. */
+export async function saveLinks(fd: FormData) {
+  const actor = await requireActor(["admin"]);
+  const db = await getDb();
+  const id = String(fd.get("id"));
+  const lines = String(fd.get("links") ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length > 10) return err("resources", "Up to 10 links per lab.");
+  const links: { label: string; url: string }[] = [];
+  for (const [i, l] of lines.entries()) {
+    const [label, ...rest] = l.split("|");
+    const p = Link.safeParse({ label: rest.length ? label : l, url: (rest.length ? rest.join("|") : l).trim() });
+    if (!p.success) return err("resources", `Link line ${i + 1}: write it as "Label | https://..."`);
+    links.push(p.data);
+  }
+  await db.query("UPDATE resources SET links = $2::jsonb, updated_at = now() WHERE id = $1", [id, JSON.stringify(links)]);
+  await audit(db, { actorId: actor.id, action: "resource.links", entity: "resource", entityId: id, after: links });
+  back("resources");
+}
+
+/** Move a booking to another in-charge (or whoever is free). The teacher and both in-charges are emailed. */
+export async function reassign(fd: FormData) {
+  const actor = await requireActor(["admin"]);
+  const db = await getDb();
+  const id = String(fd.get("id"));
+  const staffId = String(fd.get("staffId") ?? "");
+  const reason = String(fd.get("reason") ?? "").trim().slice(0, 120) || "Reassigned by the lab admin";
+  let message: string | null = null;
+  try {
+    await reassignBooking(db, actor, id, staffId && staffId !== "auto" ? staffId : undefined, reason);
+  } catch (e) {
+    if (!(e instanceof AppError)) throw e;
+    message = e.message;
+  }
+  if (message) return err("bookings", message);
+  back("bookings");
 }

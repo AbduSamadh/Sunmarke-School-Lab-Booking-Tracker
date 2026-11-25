@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offline · Sunmarke Labs</title>
+<style>
+  :root { --bg: #f6f5f2; --text: #1f1e1c; --muted: #5c5850; --accent: #1d4e89; --on-accent: #fff; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1a1917; --text: #ecebe8; --muted: #b3aea4; --accent: #8db4e3; --on-accent: #0e1a2a; } }
+  body { margin: 0; font-family: "IBM Plex Sans", system-ui, sans-serif; background: var(--bg); color: var(--text); display: grid; place-items: center; min-height: 100vh; padding: 16px; box-sizing: border-box; }
+  main { max-width: 420px; }
+  h1 { font-size: 24px; margin: 0 0 8px; }
+  p { color: var(--muted); line-height: 1.5; }
+  button { font: inherit; font-weight: 600; min-height: 44px; padding: 0 18px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); cursor: pointer; }
+  button:focus-visible { outline: 3px solid #ffbf47; outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>You are offline</h1>
+  <p>Booking needs a connection so two teachers never get the same slot. Your bookings are safe; reconnect to see them.</p>
+  <button type="button" onclick="location.reload()">Try again</button>
+</main>
+</body>
+</html>

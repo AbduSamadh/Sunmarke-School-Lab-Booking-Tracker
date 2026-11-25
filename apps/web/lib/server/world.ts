@@ -9,6 +9,8 @@ import {
   type SlotHold,
   type Timetable,
   type WorldState,
+  type WaitlistOffer,
+  type Absence,
   localToInstant,
   addDays,
 } from "@sunmarke/rules";
@@ -55,9 +57,14 @@ export async function getTimetables(db: Q): Promise<Timetable[]> {
   }));
 }
 
-export async function getResources(db: Q): Promise<(Resource & { location: string; colour: string; capacity: number | null })[]> {
-  const rows = await db.query<{ id: string; name: string; type: "room" | "cart_pool"; units: number; active: boolean; location: string; colour: string; capacity: number | null }>(
-    "SELECT id, name, type, units, active, location, colour, capacity FROM resources ORDER BY sort, name",
+export interface ResourceLink {
+  label: string;
+  url: string;
+}
+
+export async function getResources(db: Q): Promise<(Resource & { location: string; colour: string; capacity: number | null; links: ResourceLink[]; checkinCode: string | null })[]> {
+  const rows = await db.query<{ id: string; name: string; type: "room" | "cart_pool"; units: number; active: boolean; location: string; colour: string; capacity: number | null; links: ResourceLink[]; checkinCode: string | null }>(
+    "SELECT id, name, type, units, active, location, colour, capacity, links, checkin_code AS \"checkinCode\" FROM resources ORDER BY sort, name",
   );
   return rows;
 }
@@ -87,6 +94,22 @@ export async function getBlackouts(db: Q, from: string, to: string): Promise<Bla
   return rows.map((r) => ({ id: r.id, resourceId: r.resource_id, dateFrom: r.date_from, dateTo: r.date_to, blockCodes: r.block_codes, reason: r.reason, note: r.note || undefined }));
 }
 
+export async function getOffers(db: Q, from: string, to: string): Promise<WaitlistOffer[]> {
+  const rows = await db.query<{ resource_id: string; date: string; block_id: string; teacher_id: string; units: number; expires_at: Date }>(
+    "SELECT resource_id, date, block_id, teacher_id, units, expires_at FROM waitlist WHERE status = 'offered' AND date BETWEEN $1 AND $2",
+    [from, to],
+  );
+  return rows.map((r) => ({ resourceId: r.resource_id, date: r.date, blockId: r.block_id, teacherId: r.teacher_id, units: r.units, expiresAt: new Date(r.expires_at) }));
+}
+
+export async function getAbsences(db: Q, from: string, to: string): Promise<Absence[]> {
+  const rows = await db.query<{ id: string; staff_id: string; date_from: string; date_to: string; block_codes: string[] | null; reason: string }>(
+    "SELECT id, staff_id, date_from, date_to, block_codes, reason FROM absences WHERE active AND date_from <= $2 AND date_to >= $1",
+    [from, to],
+  );
+  return rows.map((r) => ({ id: r.id, staffId: r.staff_id, dateFrom: r.date_from, dateTo: r.date_to, blockCodes: r.block_codes, reason: r.reason }));
+}
+
 export interface LoadedWorld extends WorldState {
   staffRows: StaffRow[];
   resourceRows: Awaited<ReturnType<typeof getResources>>;
@@ -102,7 +125,7 @@ export interface LoadedWorld extends WorldState {
  */
 export async function loadWorld(db: Db, from: string, to: string, opts: { tx?: Tx; skipCalendar?: boolean } = {}): Promise<LoadedWorld> {
   const q: Q = opts.tx ?? db;
-  const [settings, timetables, resourceRows, assignments, staffRows, holds, blackouts] = await Promise.all([
+  const [settings, timetables, resourceRows, assignments, staffRows, holds, blackouts, offers, absences] = await Promise.all([
     getSettings(q),
     getTimetables(q),
     getResources(q),
@@ -110,6 +133,8 @@ export async function loadWorld(db: Db, from: string, to: string, opts: { tx?: T
     getStaff(q),
     getHolds(q, from, to),
     getBlackouts(q, from, to),
+    getOffers(q, from, to),
+    getAbsences(q, from, to),
   ]);
   const inchargeIds = [...new Set(assignments.map((a) => a.staffId))];
   const incharges = staffRows.filter((s) => inchargeIds.includes(s.id));
@@ -139,6 +164,8 @@ export async function loadWorld(db: Db, from: string, to: string, opts: { tx?: T
     blackouts,
     busy,
     settings,
+    offers,
+    absences,
     calendarChecked,
     calendarError,
   };

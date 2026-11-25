@@ -2,13 +2,14 @@ import { addDays, localDate } from "@sunmarke/rules";
 import { requireActor } from "@/lib/server/auth";
 import { getDb } from "@/lib/server/db";
 import { listBookings } from "@/lib/server/bookings";
-import { getBlackouts, getResources, getSettings, getStaff } from "@/lib/server/world";
+import { getAbsences, getBlackouts, getResources, getSettings, getStaff } from "@/lib/server/world";
+import { IssuesPanel } from "@/components/IssuesPanel";
 import { now } from "@/lib/server/util";
 import { fmtDateLong, fmtDateShort } from "@/lib/shared/format";
 import { SessionActions } from "@/components/SessionActions";
-import { addMeeting, blockTime, removeBlackout } from "./actions";
+import { addLeave, addMeeting, blockTime, cancelLeave, removeBlackout } from "./actions";
 
-export default async function InchargePage({ searchParams }: { searchParams: Promise<{ who?: string; saved?: string; error?: string }> }) {
+export default async function InchargePage({ searchParams }: { searchParams: Promise<{ who?: string; saved?: string; error?: string; leave?: string }> }) {
   const actor = await requireActor(["incharge", "admin"]);
   const db = await getDb();
   const sp = await searchParams;
@@ -24,6 +25,10 @@ export default async function InchargePage({ searchParams }: { searchParams: Pro
   const next = todays.find((b) => b.end.getTime() > t.getTime() && b.status === "confirmed");
   const later = list.filter((b) => b.date > today && b.date <= addDays(today, 7));
   const resources = await getResources(db);
+  const absences = (await getAbsences(db, today, addDays(today, 120)))
+    .filter((a) => actor.role === "admin" || a.staffId === actor.id)
+    .sort((a, b) => a.dateFrom.localeCompare(b.dateFrom));
+  const [leaveMoved, leaveUncovered] = (sp.leave ?? "").split("-").map(Number);
   const blackouts = (await getBlackouts(db, today, addDays(today, 60))).sort((a, b) => a.dateFrom.localeCompare(b.dateFrom));
 
   return (
@@ -45,6 +50,12 @@ export default async function InchargePage({ searchParams }: { searchParams: Pro
       </div>
       {sp.saved && <div className="notice notice-ok" role="status">Saved.</div>}
       {sp.error && <div className="notice notice-bad" role="alert">{sp.error}</div>}
+      {sp.leave && (
+        <div className={`notice ${leaveUncovered ? "notice-warn" : "notice-ok"}`} role="status">
+          Leave saved. {leaveMoved ? `${leaveMoved} booking${leaveMoved === 1 ? "" : "s"} moved to the other in-charge; the teachers were emailed.` : "No bookings needed moving."}
+          {leaveUncovered ? ` ${leaveUncovered} could not be covered; the teachers and the lab admin were told.` : ""}
+        </div>
+      )}
 
       {todays.length === 0 ? (
         <div className="empty">No sessions today. {later.length ? `Next one: ${fmtDateShort(later[0].date)} ${later[0].blockLabel}.` : ""}</div>
@@ -202,6 +213,71 @@ export default async function InchargePage({ searchParams }: { searchParams: Pro
             <button className="btn" type="submit">Add to calendar</button>
           </form>
         </section>
+      </div>
+
+      <div className="cols" style={{ marginTop: 28 }}>
+        <section className="panel">
+          <h2>Leave</h2>
+          <p className="small muted">
+            Bookings in that time move to the other in-charge when they are free. If nobody can cover, the teacher and the lab admin are emailed and the booking stays until the admin decides.
+          </p>
+          <form action={addLeave}>
+            {actor.role === "admin" && (
+              <div className="field">
+                <label htmlFor="l-who">Who is away</label>
+                <select id="l-who" name="staffId">{incharges.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}</select>
+              </div>
+            )}
+            <div className="row2">
+              <div className="field"><label htmlFor="l-from">From</label><input id="l-from" name="dateFrom" type="date" required min={today} /></div>
+              <div className="field"><label htmlFor="l-to">To <span className="muted">(optional)</span></label><input id="l-to" name="dateTo" type="date" min={today} /></div>
+            </div>
+            <fieldset className="field" style={{ border: 0, padding: 0, margin: "0 0 14px" }}>
+              <legend style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Blocks <span className="muted">(none ticked = whole day)</span></legend>
+              <div className="chips">
+                {["P1", "P2", "P3", "P4", "P5", "P6", "P7"].map((c) => (
+                  <label key={c} className="chip" style={{ margin: 0, fontWeight: 400 }}>
+                    <input type="checkbox" name="blocks" value={c} /> {c}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <div className="field">
+              <label htmlFor="l-reason">Reason <span className="muted">(shown to teachers)</span></label>
+              <input id="l-reason" name="reason" type="text" maxLength={120} placeholder="e.g. Training day" />
+            </div>
+            <button className="btn btn-primary" type="submit">Save leave</button>
+          </form>
+        </section>
+        <section>
+          <h2>Leave coming up</h2>
+          {absences.length === 0 ? (
+            <div className="empty">No leave recorded.</div>
+          ) : (
+            <ul className="list">
+              {absences.map((a) => (
+                <li key={a.id}>
+                  <div className="what">
+                    <strong>{staff.find((s) => s.id === a.staffId)?.name}</strong>
+                    {a.reason ? `: ${a.reason}` : ""}
+                    <div className="small muted">
+                      {fmtDateShort(a.dateFrom)}{a.dateTo !== a.dateFrom ? ` to ${fmtDateShort(a.dateTo)}` : ""} · {a.blockCodes ? a.blockCodes.join(", ") : "whole day"}
+                    </div>
+                  </div>
+                  <form action={cancelLeave}>
+                    <input type="hidden" name="id" value={a.id} />
+                    <button className="btn btn-sm" type="submit">Remove</button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="small muted">Removing leave does not move bookings back; reassign them from Admin if needed.</p>
+        </section>
+      </div>
+
+      <div style={{ marginTop: 28 }}>
+        <IssuesPanel db={db} resources={resources} back="/incharge" today={today} />
       </div>
     </div>
   );

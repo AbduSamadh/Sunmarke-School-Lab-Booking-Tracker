@@ -7,6 +7,7 @@ import "@sunmarke/ui-tokens/tokens.css";
 import "./globals.css";
 import { currentActor } from "@/lib/server/auth";
 import { Nav } from "@/components/Nav";
+import { RegisterSW } from "@/components/RegisterSW";
 
 export const metadata: Metadata = {
   title: "Sunmarke Lab Booking",
@@ -44,6 +45,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </div>
         </header>
         <main id="main" className="main">{children}</main>
+        <RegisterSW />
       </body>
     </html>
   );

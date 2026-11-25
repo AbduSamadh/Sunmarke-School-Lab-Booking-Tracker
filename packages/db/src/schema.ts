@@ -6,7 +6,7 @@
  * booking_slots, not by application code alone.
  * Nothing booking-related is hard-deleted: rows are deactivated or status-changed.
  */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta (key text PRIMARY KEY, value text NOT NULL);
@@ -202,6 +202,62 @@ CREATE TABLE IF NOT EXISTS audit_log (
   before jsonb,
   after jsonb,
   at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Release 1.1 ---------------------------------------------------------------
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checked_in_at timestamptz;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS feedback_sent_at timestamptz;
+ALTER TABLE resources ADD COLUMN IF NOT EXISTS links jsonb NOT NULL DEFAULT '[]';
+ALTER TABLE resources ADD COLUMN IF NOT EXISTS checkin_code text;
+
+CREATE TABLE IF NOT EXISTS recurrences (
+  id text PRIMARY KEY,
+  teacher_id text NOT NULL REFERENCES staff(id),
+  resource_id text NOT NULL REFERENCES resources(id),
+  start_date text NOT NULL,
+  end_date text NOT NULL,
+  every_weeks int NOT NULL DEFAULT 1,
+  block_codes text[] NOT NULL,
+  created_by text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS absences (
+  id text PRIMARY KEY,
+  staff_id text NOT NULL REFERENCES staff(id),
+  date_from text NOT NULL,
+  date_to text NOT NULL,
+  block_codes text[],
+  reason text NOT NULL DEFAULT '',
+  active boolean NOT NULL DEFAULT true,
+  created_by text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS feedback (
+  booking_id text PRIMARY KEY REFERENCES bookings(id),
+  teacher_id text NOT NULL REFERENCES staff(id),
+  rating int NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  comment text NOT NULL DEFAULT '',
+  issue_id text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS equipment_issues (
+  id text PRIMARY KEY,
+  resource_id text NOT NULL REFERENCES resources(id),
+  item text NOT NULL DEFAULT '',      -- e.g. "Cart 7", "Headset 3"
+  title text NOT NULL,
+  detail text NOT NULL DEFAULT '',
+  severity text NOT NULL DEFAULT 'medium' CHECK (severity IN ('low','medium','high')),
+  status text NOT NULL DEFAULT 'open' CHECK (status IN ('open','resolved')),
+  blackout_id text,
+  booking_id text,
+  reported_by text NOT NULL,
+  resolved_by text,
+  resolved_note text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  resolved_at timestamptz
 );
 
 CREATE TABLE IF NOT EXISTS settings (key text PRIMARY KEY, value jsonb NOT NULL);

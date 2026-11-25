@@ -19,6 +19,8 @@ export const BookingInput = z
     lessonPlanUrl: z.union([z.string().trim().url().max(500), z.literal("")]).optional(),
     specialRequirements: z.string().trim().max(300).default(""),
     overrideWindow: z.boolean().optional(),
+    /** Admin only: book in a teacher's name. */
+    onBehalfOf: z.string().min(1).max(40).optional(),
   })
   .strict();
 export type BookingInput = z.infer<typeof BookingInput>;
@@ -44,3 +46,48 @@ export const WaitlistInput = z
   .object({ resourceId: z.string().min(1), date: isoDate, blockId: z.string().min(1), units: z.coerce.number().int().min(1).max(10).optional() })
   .strict();
 export const SignInInput = z.object({ email: z.string().trim().toLowerCase().email() }).strict();
+
+export const SeriesInput = z
+  .object({
+    resourceId: z.string().min(1).max(40),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    everyWeeks: z.coerce.number().int().min(1).max(4).default(1),
+    blockCodes: z.array(z.string().min(1).max(20)).min(1).max(3),
+    subject: z.string().trim().min(1, "Choose a subject").max(80),
+    yearGroup: z.string().trim().min(1, "Choose a year group").max(20),
+    section: z.string().trim().max(10).default(""),
+    studentCount: z.coerce.number().int().min(1).max(60),
+    cartCount: z.coerce.number().int().min(1).max(10).optional(),
+    classroom: z.string().trim().max(40).optional(),
+    objective: z.string().trim().max(300).default(""),
+    specialRequirements: z.string().trim().max(300).default(""),
+    onBehalfOf: z.string().min(1).max(40).optional(),
+    preview: z.boolean().optional(),
+  })
+  .strict();
+export type SeriesInput = z.infer<typeof SeriesInput>;
+
+export const FeedbackInput = z
+  .object({
+    rating: z.coerce.number().int().min(1).max(5),
+    comment: z.string().trim().max(500).default(""),
+    issue: z.string().trim().max(300).optional(),
+    item: z.string().trim().max(60).optional(),
+  })
+  .strict();
+
+export const ReassignInput = z.object({ staffId: z.string().min(1).max(40).optional(), reason: z.string().trim().max(200).default("") }).strict();
+
+export const IssueInput = z
+  .object({
+    resourceId: z.string().min(1).max(40),
+    item: z.string().trim().max(60).default(""),
+    title: z.string().trim().min(3, "Describe the problem in a few words").max(120),
+    detail: z.string().trim().max(500).default(""),
+    severity: z.enum(["low", "medium", "high"]).default("medium"),
+    blockFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    blockTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  })
+  .strict();
+export type IssueInput = z.infer<typeof IssueInput>;
