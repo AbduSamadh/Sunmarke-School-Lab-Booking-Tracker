@@ -8,6 +8,7 @@
 - New look ("Sunlit"): Tektur as the main font with Nova Square for labels and navigation, an icon and colour for each lab (in the grid, chips, bookings, reports and assistant), status icons in the grid, a greeting header, staff avatars, card-style stats with icons, and a new sign-in page. Light and dark both pass axe WCAG A/AA.
 - Sunmarke School and Fortes Education logos (top bar, footer; light and dark versions) and colours taken from the Sunmarke logo: navy accent, yellow highlight, ribbon colours for the labs.
 - New landing and sign-in page: animated ribbon globe in the school colours, lab chips, key numbers, how it works, and a card for each lab with its in-charges.
+- In-charge screen redone: a greeting with the next session, four at-a-glance numbers, a week calendar by period (sessions coloured by lab, leave and blocked time shown) beside today's timeline with attendance buttons. Block time, leave, equipment and the test calendar moved into tabs with counts. Return links from these forms are now checked (no open redirects).
 - Optional Claude AI mode for the assistant, off by default (see DECISIONS.md).
 - Server: 8 new assistant tests (29 total).
 

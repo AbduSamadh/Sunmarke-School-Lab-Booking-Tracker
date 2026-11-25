@@ -32,7 +32,7 @@ export async function blockTime(fd: FormData) {
     reason: fd.get("reason"),
     note: fd.get("note") ?? "",
   });
-  const back = String(fd.get("back") ?? "/incharge");
+  const back = safeBack(fd);
   if (!p.success) redirect(`${back}${back.includes("?") ? "&" : "?"}error=${encodeURIComponent(p.error.issues[0].message)}`);
   const d = p.data;
   const db = await getDb();
@@ -52,7 +52,7 @@ export async function removeBlackout(fd: FormData) {
   const db = await getDb();
   await db.query("UPDATE blackouts SET active = false WHERE id = $1", [id]);
   await audit(db, { actorId: actor.id, action: "blackout.remove", entity: "blackout", entityId: id });
-  redirect(String(fd.get("back") ?? "/incharge"));
+  redirect(safeBack(fd));
 }
 
 /** Demo only: put a meeting in an in-charge's simulated calendar (stands in for Google/Outlook). */
@@ -63,17 +63,22 @@ export async function addMeeting(fd: FormData) {
   const start = String(fd.get("start"));
   const end = String(fd.get("end"));
   const title = String(fd.get("title") || "Meeting").slice(0, 80);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end) || end <= start) redirect("/incharge?error=Check+the+meeting+date+and+times");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end) || end <= start) redirect(withQ(safeBack(fd, "/incharge?tab=calendar"), "error=Check+the+meeting+date+and+times"));
   const db = await getDb();
   await addExternalEvent(db, staffId, localToInstant(date, start, DEFAULT_SETTINGS), localToInstant(date, end, DEFAULT_SETTINGS), title);
   await audit(db, { actorId: actor.id, action: "calendar.mock_event", entity: "staff", entityId: staffId, after: { date, start, end, title } });
-  redirect("/incharge?saved=1");
+  redirect(withQ(safeBack(fd, "/incharge?tab=calendar"), "saved=1"));
 }
 
 // ---------------------------------------------------------------------------
 // Release 1.1: leave and cover, equipment log
 // ---------------------------------------------------------------------------
 
+/** Only ever return to our own in-charge or admin pages (no open redirects). */
+function safeBack(fd: FormData, fallback = "/incharge") {
+  const b = String(fd.get("back") ?? "");
+  return /^\/(incharge|admin)(\?[\w=&-]*)?$/.test(b) ? b : fallback;
+}
 const withQ = (back: string, q: string) => `${back}${back.includes("?") ? "&" : "?"}${q}`;
 async function attempt<T>(fn: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false; message: string }> {
   try {
@@ -102,29 +107,29 @@ export async function addLeave(fd: FormData) {
       blocks: fd.getAll("blocks").map(String),
       reason: String(fd.get("reason") ?? ""),
     });
-  if (!p.success) redirect(withQ("/incharge", `error=${encodeURIComponent(p.error.issues[0].message)}`));
+  if (!p.success) redirect(withQ(safeBack(fd, "/incharge?tab=leave"), `error=${encodeURIComponent(p.error.issues[0].message)}`));
   const d = p.data;
   const db = await getDb();
   const r = await attempt(() =>
     addAbsence(db, actor, { staffId: d.staffId, dateFrom: d.dateFrom, dateTo: d.dateTo ?? d.dateFrom, blockCodes: d.blocks.length ? d.blocks : null, reason: d.reason }),
   );
-  if (!r.ok) redirect(withQ("/incharge", `error=${encodeURIComponent(r.message)}`));
+  if (!r.ok) redirect(withQ(safeBack(fd, "/incharge?tab=leave"), `error=${encodeURIComponent(r.message)}`));
   revalidatePath("/");
-  redirect(withQ("/incharge", `leave=${r.value.reassigned}-${r.value.uncovered}`));
+  redirect(withQ(safeBack(fd, "/incharge?tab=leave"), `leave=${r.value.reassigned}-${r.value.uncovered}`));
 }
 
 export async function cancelLeave(fd: FormData) {
   const actor = await requireActor(["incharge", "admin"]);
   const db = await getDb();
   const r = await attempt(() => removeAbsence(db, actor, String(fd.get("id"))));
-  if (!r.ok) redirect(withQ("/incharge", `error=${encodeURIComponent(r.message)}`));
+  if (!r.ok) redirect(withQ(safeBack(fd, "/incharge?tab=leave"), `error=${encodeURIComponent(r.message)}`));
   revalidatePath("/");
-  redirect(withQ("/incharge", "saved=1"));
+  redirect(withQ(safeBack(fd, "/incharge?tab=leave"), "saved=1"));
 }
 
 export async function reportEquipment(fd: FormData) {
   const actor = await requireActor(["incharge", "admin"]);
-  const back = String(fd.get("back") ?? "/incharge");
+  const back = safeBack(fd);
   const raw = Object.fromEntries([...fd.entries()].filter(([k, v]) => k !== "back" && !k.startsWith("$") && v !== ""));
   const p = IssueInput.safeParse(raw);
   if (!p.success) redirect(withQ(back, `error=${encodeURIComponent(p.error.issues[0].message)}`));
@@ -136,7 +141,7 @@ export async function reportEquipment(fd: FormData) {
 
 export async function resolveEquipment(fd: FormData) {
   const actor = await requireActor(["incharge", "admin"]);
-  const back = String(fd.get("back") ?? "/incharge");
+  const back = safeBack(fd);
   const db = await getDb();
   const r = await attempt(() => resolveIssue(db, actor, String(fd.get("id")), String(fd.get("note") ?? "").slice(0, 300)));
   if (!r.ok) redirect(withQ(back, `error=${encodeURIComponent(r.message)}`));
