@@ -4,6 +4,7 @@ import { getDb } from "@/lib/server/db";
 import { getSettings } from "@/lib/server/world";
 import { ArrowRight, Bot, CalendarCheck, MousePointerClick, UserCheck } from "lucide-react";
 import { Avatar, LabIcon } from "@/components/LabIcon";
+import { LogoBuild } from "@/components/LogoBuild";
 
 export default async function SignIn({ searchParams }: { searchParams: Promise<{ error?: string; next?: string }> }) {
   const { error, next: nextRaw } = await searchParams;
@@ -58,9 +59,7 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
           <span className="lp-ring lp-ring-2" />
           <span className="lp-ring lp-ring-3" />
           <span className="lp-mark">
-            {/* The Sunmarke School logo mark, unaltered; only its position animates. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/sunmarke-mark.png" alt="" width={264} height={264} />
+            <LogoBuild />
           </span>
           {labs.map((l, i) => (
             <span key={l.id} className={`lp-orbit lp-orbit-${i}`}>
