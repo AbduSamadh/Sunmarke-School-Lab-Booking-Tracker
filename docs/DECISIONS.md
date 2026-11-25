@@ -42,6 +42,14 @@ Everything in Release 1.1 that does not need Fortes IT is built. Assumptions mad
 - **Lesson links:** admin adds links per lab (safety rules, guides); they show in the booking sheet and the confirmation email.
 - **Offline:** the PWA caches only the app shell and shows an offline page. Pages and bookings are never cached, because lab devices are shared and availability must be live.
 
+## Release 1.2: look, motion and assistant (built 25 Nov 2026)
+
+- **Motion:** on abd's request the UI has subtle motion (hover lift, pointer glow, click ripple, entrances). It is purely decorative and switched off under "reduce motion".
+- **Brand (D10, part answered):** abd supplied the Sunmarke School and Fortes Education logos on 25 Nov 2026. Colours now come from the Sunmarke logo; abd chose the fonts: Tektur (primary, headings and text) and Nova Square (accent: labels, tags, navigation). Dark-theme logo copies recolour the navy and black text to light.
+- **Theme:** stored in a `slb_theme` cookie so the page renders in the right theme with no flash.
+- **Assistant:** built in by default. It understands plain requests with a parser, checks everything with packages/rules, and only ever prepares cards; the person presses the button and the normal API does the write. Teachers cannot choose the in-charge (R-rules assign primary then backup), so the assistant explains who it will be; admins can reassign.
+- **Claude AI mode (open, waiting on abd):** set `ASSISTANT_PROVIDER=claude` and `ANTHROPIC_API_KEY` (optional `ASSISTANT_MODEL`) to let Claude understand requests. Claude can only call the same read-only functions; changes still need the person's press. Sent to Anthropic: the person's messages, first name and role, lab and in-charge names, free slots and their own bookings. Falls back to the built-in assistant on any error. Needs a school-approved API key and a data-protection check before switching on.
+
 ## Waiting on Fortes IT
 
 - Real sign-in (Google Workspace and Microsoft 365 SSO), replacing the placeholder email sign-in. **Do not deploy publicly before this.**

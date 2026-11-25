@@ -37,6 +37,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
     <Availability
       people={people}
       selfId={actor.id}
+      greeting={`${greet()}, ${actor.name.split(" ")[0]}`}
       grid={grid}
       date={date}
       today={today}
@@ -59,4 +60,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
       maxLeadDays={settings.maxLeadDays}
     />
   );
+}
+
+function greet() {
+  const h = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: "Asia/Dubai" }).format(now()));
+  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }

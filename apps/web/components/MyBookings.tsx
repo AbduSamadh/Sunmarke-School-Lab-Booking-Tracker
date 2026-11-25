@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { fmtDateShort } from "@/lib/shared/format";
+import { LabIcon } from "./LabIcon";
 
 export interface Row {
   id: string; resourceId: string; resourceName: string; colour: string; date: string; blockLabel: string; timeLabel: string; inchargeName: string;
@@ -78,7 +79,7 @@ function Item({ b, past, rateOpen }: { b: Row; past?: boolean; rateOpen?: boolea
       </div>
       <div className="what">
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <span className="swatch" style={{ background: `var(--r-${b.colour})` }} aria-hidden="true" />
+          <LabIcon colour={b.colour} size="md" />
           <strong>{b.resourceName}</strong>
           {b.cartCount ? <span className="small">{b.cartCount} carts to {b.classroom}</span> : null}
           <span className={`tag ${cls}`}>{st}</span>

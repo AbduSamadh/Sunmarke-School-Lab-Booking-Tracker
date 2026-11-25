@@ -7,7 +7,7 @@ Source of truth: docs/PLAN.md (the build plan) and docs/DECISIONS.md (what v0.1 
 - Rules R1–R10 in docs/PLAN.md are law. Any change needs a plan update first.
 - Every booking write runs in one DB transaction, protected by the unique indexes on booking_slots.
 - Timezone Asia/Dubai. Store UTC, display local, 24 h times.
-- UI uses only tokens from packages/ui-tokens. No gradients, glass, emoji, or stock card grids.
+- UI uses only tokens from packages/ui-tokens. No gradients, glass, emoji, or stock card grids. Subtle motion (hover lift, pointer glow, ripples, entrances) is allowed by abd's request and must switch off under prefers-reduced-motion. The "Sunlit" look (apps/web/app/sunlit.css) adds display type, lab icons (components/LabIcon.tsx) and flat decorative shapes; patterns and colour never carry meaning on their own.
 - Read the frontend-design and dataviz skill guidance before UI or chart work; apply principles, not their visual style.
 - WCAG 2.2 AA on every screen.
 - No secrets in code. Use .env.local and the host's env vars.

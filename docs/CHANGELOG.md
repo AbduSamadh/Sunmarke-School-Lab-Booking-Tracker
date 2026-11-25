@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.0 (25 Nov 2026)
+
+- Dark mode switch in the top bar, with an animated sun-to-moon knob and a circular reveal. It follows the device until you choose, and remembers your choice.
+- Livelier screens: hover lift and pointer glow on panels and grid cells, click ripples, gentle entrance animations, an animated tick on a confirmed booking. All motion is off when the device asks for reduced motion.
+- Booking assistant (bottom-right button on every signed-in screen): ask how booking works, what is free ("free labs Thursday P3"), book ("book Quantum tomorrow P4-P5 for Y8 B science"), cancel, join a waitlist, or check the rules. It only proposes; you press Confirm, and every booking goes through the same rules and API as the grid. Admins can book for a teacher and pick the in-charge.
+- New look ("Sunlit"): Tektur as the main font with Nova Square for labels and navigation, an icon and colour for each lab (in the grid, chips, bookings, reports and assistant), status icons in the grid, a greeting header, staff avatars, card-style stats with icons, and a new sign-in page. Light and dark both pass axe WCAG A/AA.
+- Sunmarke School and Fortes Education logos (top bar, footer; light and dark versions) and colours taken from the Sunmarke logo: navy accent, yellow highlight, ribbon colours for the labs.
+- New landing and sign-in page: a bold ribbon globe of the Sunmarke logo mark: ribbon paths, widths and colours traced from the logo, drawn in its layering order (purple, pink, orange, cyan, green, yellow) while the globe spins and comes to rest in the logo's position, lab chips, key numbers, how it works, and a card for each lab with its in-charges.
+- In-charge screen redone: a greeting with the next session, four at-a-glance numbers, a week calendar by period (sessions coloured by lab, leave and blocked time shown) beside today's timeline with attendance buttons. Block time, leave, equipment and the test calendar moved into tabs with counts. Return links from these forms are now checked (no open redirects).
+- Optional Claude AI mode for the assistant, off by default (see DECISIONS.md).
+- Server: 8 new assistant tests (29 total).
+
 ## 1.1.0 (25 Nov 2026)
 
 Release 1.1 from the plan, minus anything that needs Fortes IT (see DECISIONS.md).
