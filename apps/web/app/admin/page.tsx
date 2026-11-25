@@ -121,11 +121,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <div className="field">
                 <label htmlFor="hub-url">Labs Hub site</label>
                 <input id="hub-url" name="hubUrl" type="url" inputMode="url" placeholder="https://sites.google.com/..." defaultValue={campuses.find((c) => c.id === campus)?.hub_url ?? ""} aria-describedby="hub-hint" />
-                <div className="hint" id="hub-hint">Shown at the foot of every page and in confirmation emails. Leave blank to hide it.</div>
+                <div className="hint" id="hub-hint">Shown at the foot of every page and in booking messages. Leave blank to hide it.</div>
               </div>
               <div><button className="btn btn-sm" type="submit">Save Labs Hub link</button></div>
             </form>
-            <p className="small muted">Links teachers see when they book and in the confirmation email: safety rules, lesson ideas, how-to guides. One per line, as &ldquo;Label | https://&hellip;&rdquo;.</p>
+            <p className="small muted">Links teachers see when they book and in the booking message: safety rules, lesson ideas, how-to guides. One per line, as &ldquo;Label | https://&hellip;&rdquo;.</p>
             <div className="cols">
               {resources.map((r) => (
                 <form key={r.id} action={saveLinks}>

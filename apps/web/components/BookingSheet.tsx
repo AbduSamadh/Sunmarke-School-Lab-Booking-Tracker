@@ -441,7 +441,7 @@ export function BookingSheet(props: {
           <>
             <div className="sheet-body" aria-live="polite">
               <svg className="tick" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="22" /><path d="M16 27l7 7 14-15" /></svg>
-              <div className="notice notice-ok">Confirmed. A confirmation email with a calendar invite is on its way.</div>
+              <div className="notice notice-ok">Confirmed. A Teams message and a calendar invite are on their way.</div>
               <div className="summary">
                 <dl>
                   <dt>What</dt>
@@ -521,7 +521,7 @@ export function BookingSheet(props: {
             <div className="sheet-body" aria-live="polite">
               {step.created ? (
                 <div className="notice notice-ok" role="status">
-                  Booked {step.lines.filter((l) => l.ok).length} of {step.lines.length} dates. Each has its own confirmation email. Cancel the whole series from My bookings.
+                  Booked {step.lines.filter((l) => l.ok).length} of {step.lines.length} dates. Each has its own Teams message. Cancel the whole series from My bookings.
                 </div>
               ) : (
                 <p className="small">
@@ -568,7 +568,7 @@ export function BookingSheet(props: {
           <>
             <div className="sheet-body">
               <div className="notice notice-ok" role="status">
-                You are number {step.position} on the waitlist. If this slot frees up, you get an email straight away.
+                You are number {step.position} on the waitlist. If this slot frees up, you get a Teams message straight away.
               </div>
             </div>
             <div className="sheet-foot"><button className="btn btn-primary" onClick={() => props.onClose(true)}>Done</button></div>

@@ -104,7 +104,7 @@ export function Assistant({ firstName, role }: { firstName: string; role: string
         from: "bot",
         tick: true,
         reply: {
-          text: [`Booked: ${j.booking.resourceName}, ${j.booking.blockLabel} (${j.booking.timeLabel}) with ${j.booking.inchargeName}.${extra}`, "A confirmation email with a calendar invite is on its way."],
+          text: [`Booked: ${j.booking.resourceName}, ${j.booking.blockLabel} (${j.booking.timeLabel}) with ${j.booking.inchargeName}.${extra}`, "A Teams message and a calendar invite are on their way."],
           link: { label: "See My bookings", href: "/bookings" },
         },
       });

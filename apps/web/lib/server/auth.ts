@@ -13,6 +13,8 @@ import type { Actor } from "./bookings";
  * Fortes uses and IT registers the app. Do not deploy publicly as-is.
  */
 const COOKIE = "slb_session";
+/** Secure cookies in production; COOKIE_SECURE=0 for the offline demo on http://localhost (Safari refuses Secure cookies there). */
+export const secureCookies = () => (process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === "1" : process.env.NODE_ENV === "production");
 const g = globalThis as unknown as { __slbSecret?: string };
 function secret() {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
@@ -72,7 +74,7 @@ export async function signInByEmail(db: Db, email: string): Promise<{ ok: true; 
 
 export async function setSessionCookie(staffId: string) {
   const c = await cookies();
-  c.set(COOKIE, makeToken(staffId), { httpOnly: true, sameSite: "lax", path: "/", secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 14 });
+  c.set(COOKIE, makeToken(staffId), { httpOnly: true, sameSite: "lax", path: "/", secure: secureCookies(), maxAge: 60 * 60 * 24 * 14 });
 }
 export async function clearSessionCookie() {
   (await cookies()).delete(COOKIE);

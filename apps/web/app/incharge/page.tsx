@@ -132,7 +132,7 @@ export default async function InchargePage({ searchParams }: { searchParams: Pro
                 </div>
               </div>
               <WeekCalendar days={days} today={today} bookings={week} timetables={timetables} blackouts={blackouts} absences={absences} resources={resources} showWho={who === "all"} />
-              <p className="small muted" style={{ marginTop: 8 }}>You also get each day&apos;s list by email at 07:00.</p>
+              <p className="small muted" style={{ marginTop: 8 }}>You also get each day&apos;s list as a Teams message at 07:00.</p>
             </section>
 
             <aside className="ic-side" aria-label="Today">

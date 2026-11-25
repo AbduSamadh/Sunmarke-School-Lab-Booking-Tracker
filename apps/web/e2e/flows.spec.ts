@@ -11,7 +11,7 @@ test("teacher books a free lab slot, sees it in My bookings, and cancels it", as
   await page.getByLabel("Year").selectOption({ index: 1 });
   await page.getByLabel("Students").fill("20");
   await page.getByRole("button", { name: /^Book Quantum/ }).click();
-  await expect(page.getByText("Confirmed. A confirmation email")).toBeVisible();
+  await expect(page.getByText("Confirmed. A Teams message")).toBeVisible();
 
   await page.goto("/bookings");
   const row = page.locator("li", { hasText: "Quantum" }).filter({ hasText: "Confirmed" }).first();

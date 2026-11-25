@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { seeOther } from "@/lib/server/util";
 import { cookies } from "next/headers";
 import { getDb } from "@/lib/server/db";
-import { CAMPUS_COOKIE, currentActor } from "@/lib/server/auth";
+import { CAMPUS_COOKIE, currentActor, secureCookies } from "@/lib/server/auth";
 import { audit } from "@/lib/server/audit";
 
 /**
@@ -26,13 +27,13 @@ export async function POST(req: Request) {
   if (!actor) return NextResponse.json({ error: { code: "unauthenticated", message: "Sign in first." } }, { status: 401 });
   const campusId = typeof raw.campusId === "string" ? raw.campusId : "";
   const back = backTo(req, raw.back);
-  if (!actor.allCampuses) return isForm ? NextResponse.redirect(new URL(back, req.url), 303) : NextResponse.json({ error: { code: "forbidden", message: "You can only use your own campus." } }, { status: 403 });
+  if (!actor.allCampuses) return isForm ? seeOther(back) : NextResponse.json({ error: { code: "forbidden", message: "You can only use your own campus." } }, { status: 403 });
   const db = await getDb();
   const ok = await db.query("SELECT 1 FROM campuses WHERE id = $1 AND active", [campusId]);
   if (!ok.length) return NextResponse.json({ error: { code: "invalid", message: "Unknown campus." } }, { status: 422 });
-  (await cookies()).set(CAMPUS_COOKIE, campusId, { httpOnly: true, sameSite: "lax", path: "/", secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 180 });
+  (await cookies()).set(CAMPUS_COOKIE, campusId, { httpOnly: true, sameSite: "lax", path: "/", secure: secureCookies(), maxAge: 60 * 60 * 24 * 180 });
   await audit(db, { actorId: actor.id, action: "campus.switch", entity: "campus", entityId: campusId });
-  return isForm ? NextResponse.redirect(new URL(back, req.url), 303) : NextResponse.json({ ok: true, current: campusId });
+  return isForm ? seeOther(back) : NextResponse.json({ ok: true, current: campusId });
 }
 
 /** Where to go after a form post: a same-site path from the form, else the page it came from. */

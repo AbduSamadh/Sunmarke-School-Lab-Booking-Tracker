@@ -31,7 +31,7 @@ test("teacher walkthrough", async ({ page }) => {
   await page.waitForTimeout(800);
   await page.screenshot({ path: join(IMG, "teacher-sheet.png") });
   await page.getByRole("button", { name: /^Book Quantum/ }).click();
-  await expect(page.getByText("Confirmed. A confirmation email")).toBeVisible();
+  await expect(page.getByText("Confirmed. A Teams message")).toBeVisible();
   await page.waitForTimeout(1500);
   await page.goto("/bookings");
   await page.waitForTimeout(1500);
