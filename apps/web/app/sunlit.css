@@ -234,24 +234,25 @@ button.cell-free:hover::before { transform: scaleY(1); }
    floats gently, and has rings pulsing out from behind it. */
 .lp-mark { position: absolute; inset: 19%; display: block; border-radius: 50%; animation: mark-float 6s 2.4s ease-in-out infinite; filter: drop-shadow(0 24px 30px rgba(16, 32, 64, .30)); }
 .lp-mark img { width: 100%; height: 100%; display: block; }
-/* Logo build: ribbons drawn along paths traced from the logo, then the exact
-   logo image settles on top, so the final frame is the logo itself. */
-.lb, .lb-stack { position: absolute; inset: 0; display: block; cursor: pointer; }
-.lb-svg, .lb-logo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; }
-.lb-svg { animation: lb-svg-out 300ms 2700ms linear both; }
-.lb-disc { transform-origin: 264px 264px; animation: lb-disc 600ms 100ms var(--spring) both; }
-.lb-ringline { transform-origin: 264px 264px; transform: rotate(-90deg); stroke-dasharray: 1; stroke-dashoffset: 1; animation: lb-draw 900ms var(--ease-out) forwards; }
-.lb-spin { transform-origin: 264px 264px; animation: lb-spin 2400ms 300ms var(--ease-out) both; }
-.lb-rib { stroke-dasharray: 1; stroke-dashoffset: 1; animation: lb-draw 900ms var(--ease-out) forwards; }
-.lb-rib-0 { animation-delay: 450ms; } .lb-rib-1 { animation-delay: 600ms; } .lb-rib-2 { animation-delay: 750ms; }
-.lb-rib-3 { animation-delay: 900ms; } .lb-rib-4 { animation-delay: 1050ms; } .lb-rib-5 { animation-delay: 1250ms; }
-.lb-logo { opacity: 0; animation: lb-logo 600ms 2200ms var(--ease-out) forwards; }
+/* Logo build: vector mark traced from the logo. Every animation ends at its
+   resting state (no rotation, full paint), so the final frame is the logo. */
+.lb { position: absolute; inset: 0; display: block; cursor: pointer; }
+.lb-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; animation: globe-in 900ms var(--spring) both; }
+.lb-disc { transform-origin: 264px 264px; animation: lb-disc 650ms 150ms var(--spring) both; }
+.lb-ringline { transform-origin: 264px 264px; transform: rotate(-90deg); stroke-dasharray: 1; stroke-dashoffset: 1; animation: lb-draw 1000ms var(--ease-out) forwards; }
+.lb-spin { transform-origin: 264px 264px; animation: lb-spin 2600ms 250ms cubic-bezier(.2,.7,.2,1) both; }
+.lb-paint { stroke-dasharray: 1; stroke-dashoffset: 1; animation: lb-draw 900ms var(--ease-out) forwards; }
+[id^="lb-m-purple"] .lb-paint { animation-delay: 450ms; }
+[id^="lb-m-pink"] .lb-paint { animation-delay: 650ms; }
+[id^="lb-m-orange"] .lb-paint { animation-delay: 850ms; }
+[id^="lb-m-cyan"] .lb-paint { animation-delay: 1050ms; }
+[id^="lb-m-green"] .lb-paint { animation-delay: 1250ms; }
+[id^="lb-m-yellow"] .lb-paint { animation-delay: 1500ms; animation-duration: 800ms; }
+@keyframes globe-in { from { opacity: 0; transform: scale(.85); } }
 @keyframes lb-draw { to { stroke-dashoffset: 0; } }
 @keyframes lb-disc { from { transform: scale(0); } }
-@keyframes lb-spin { from { transform: rotate(-120deg); } to { transform: rotate(0deg); } }
-@keyframes lb-logo { to { opacity: 1; } }
-@keyframes lb-svg-out { to { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .lb-svg { display: none; } .lb-logo { animation: none; opacity: 1; } }
+@keyframes lb-spin { from { transform: rotate(-200deg); } to { transform: rotate(0deg); } }
+@media (prefers-reduced-motion: reduce) { .lb-svg, .lb-disc, .lb-spin { animation: none !important; } .lb-paint, .lb-ringline { animation: none !important; stroke-dashoffset: 0 !important; } }
 @keyframes mark-in { from { opacity: 0; transform: scale(.7); } }
 @keyframes mark-float { 50% { transform: translateY(-10px); } }
 .lp-ring { position: absolute; inset: 19%; border-radius: 50%; border: 2px solid var(--brand-navy); opacity: 0; animation: ring-out 4.5s 2.2s ease-out infinite; }
