@@ -97,3 +97,43 @@ export const IssueInput = z
   })
   .strict();
 export type IssueInput = z.infer<typeof IssueInput>;
+
+/** Release 1.1: in-charge leave. */
+export const AbsenceInput = z
+  .object({
+    staffId: z.string().min(1).max(40),
+    dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    blockCodes: z.array(z.string().max(20)).max(10).optional(),
+    reason: z.string().trim().max(120).default(""),
+  })
+  .strict();
+
+const opt = (n: number) => z.string().max(n).optional();
+const AssistantDraft = z
+  .object({
+    resourceId: opt(40), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), blockCodes: z.array(z.string().max(10)).max(3).optional(), double: z.boolean().optional(),
+    inchargeId: opt(40), forStaffId: opt(40), subject: opt(80), yearGroup: opt(20), section: opt(10), studentCount: z.number().int().min(1).max(60).optional(),
+    cartCount: z.number().int().min(1).max(50).optional(), classroom: opt(40), pending: z.enum(["book", "waitlist"]).optional(),
+  })
+  .strip();
+export const AssistantInput = z
+  .object({
+    message: z.string().trim().min(1).max(500),
+    draft: AssistantDraft.optional(),
+    history: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().max(2000) })).max(12).optional(),
+  })
+  .strict();
+
+/** Release 2: phone app push tokens. */
+export const DeviceInput = z
+  .object({
+    token: z.string().min(10).max(200).regex(/^[\w\-[\]:.]+$/, "Not a push token"),
+    platform: z.enum(["ios", "android", "web"]),
+  })
+  .strict();
+export const DeviceRemove = z.object({ token: z.string().min(10).max(200) }).strict();
+export const CheckinInput = z.object({ code: z.string().min(4).max(40) }).strict();
+export const StaffImportInput = z.object({ csv: z.string().max(500_000) }).strict();
+export const ResolveIssueInput = z.object({ note: z.string().trim().max(300).default("") }).strict();
+export const CampusSwitch = z.object({ campusId: z.string().min(1).max(40), back: z.string().max(200).optional() });
