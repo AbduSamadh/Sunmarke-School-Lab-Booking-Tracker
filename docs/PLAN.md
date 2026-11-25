@@ -90,7 +90,8 @@ in-charge or a sixth lab needs no code change.
 1.  **R1 Resource free.** A room is free when it has no confirmed
     booking and no blackout (holiday, exam, maintenance) in that block.
     AI Carts are free when requested carts ≤ 10 minus carts already
-    booked in that block.
+    booked in that block. A booking takes at most 3 carts, and each
+    cart goes with its own free in-charge (changed by abd, 25 Nov 2026).
 
 2.  **R2 In-charge free.** The in-charge must have no booking in this
     app *and* show free in their Google/Outlook calendar for the whole
@@ -104,12 +105,15 @@ in-charge or a sixth lab needs no code change.
     class, or any calendar event), assign the other in-charge if free.
     The teacher sees who is coming before confirming.
 
-5.  **R5 No in-charge, no booking.** If neither is free, the block shows
+5.  **R5 No in-charge, no booking.** If no listed in-charge is free
+    (primary, fallback, then Nael as third), the block shows
     as unavailable, with the reason "No lab in-charge available". The
     teacher can join the waitlist.
 
 6.  **R6 One place at a time.** An in-charge can hold only one booking
-    per block, lab or cart.
+    per block, lab or cart. With 3 carts out, all 3 in-charges are
+    busy, so nothing else can be booked in that block.
+    Every booking is one period (double lessons removed, 25 Nov 2026).
 
 7.  **R7 No double booking under load.** Two teachers clicking the same
     slot at the same moment: exactly one wins. Enforced by a database

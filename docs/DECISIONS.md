@@ -61,9 +61,16 @@ Everything in Release 1.1 that does not need Fortes IT is built. Assumptions mad
 - **Labs Hub:** one link per campus (Admin › Labs and carts), plus the per-lab lesson links from Release 1.1. The real Labs Hub URL still needs entering.
 - **Load:** on the embedded database, 60 simultaneous users gave p95 about 0.6 s with no errors, and 30 simultaneous requests for one slot gave exactly one booking. The occasional slow request (p99 about 4 s) comes from the single-process embedded database and should go once the app runs on hosted Postgres.
 
+## Release 2.1: abd's changes (25 Nov 2026)
+
+- **AI Carts rule changed (D4, D5):** at most 3 carts per booking, and each cart needs its own free in-charge, so 3 carts take Ram, Abdul and Nael and nothing else is bookable in that period. Each in-charge gets their own slot row, so the database index still stops anyone being in two places.
+- **Nael** is the third in-charge (priority 3) for every lab and the carts. **Dr. Sreejit** has the viewer (leadership) role for SLT, Principal and BOD, across campuses.
+- **"Remove double booking"** was read as removing the double-lesson (two-period) option. Booking one slot twice was never possible.
+- **Teams instead of email:** sent through a Power Automate "When a Teams webhook request is received" workflow that someone with Teams access sets up; the app posts the recipient, subject and an Adaptive Card. No Microsoft app registration needed. Until `TEAMS_WORKFLOW_URL` is set, nothing leaves the app.
+
 ## Waiting on Fortes IT
 
 - Real sign-in (Google Workspace and Microsoft 365 SSO), replacing the placeholder email sign-in. **Do not deploy publicly before this.**
 - Google and Microsoft calendar adapters (read busy times, write events) and a sending account for email. The simulated calendar and outbox stand in until then.
 - Hosting in the UAE (D9), backups, error monitoring and a scheduler calling `/api/v1/cron`.
-- Teams or Google Chat notifications.
+- The Teams Workflows link for notifications (docs/TEAMS.md), from someone with Teams admin or Workflows access.

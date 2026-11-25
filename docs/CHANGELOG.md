@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.1.0 (25 Nov 2026)
+
+abd's changes of 25 Nov.
+
+- AI Carts: up to 3 carts per booking, and each cart comes with its own lab in-charge. Booking 3 carts ties up all three in-charges, so no lab can be booked in that period. The grid shows how many carts can still go out (the lower of carts left and free in-charges).
+- Nael added as the third lab in-charge for every lab and the carts (after the primary and the backup). Admin › Labs and carts has a third in-charge choice.
+- Dr. Sreejit added with leadership access (SLT, Principal and BOD).
+- Double lessons removed: every booking is one period. Double-booking one slot was already impossible and still is.
+- "Other" subject, with a box to say which subject.
+- Reports: a by-teacher table (sessions, attended, no-shows, cancelled, cart sessions, students, labs, average rating) with CSV export.
+- Notifications go to Microsoft Teams instead of email, through a Teams Workflows link (`TEAMS_WORKFLOW_URL`, see docs/TEAMS.md). Until the link is set, messages are kept in the app's Messages page. `NOTIFY_CHANNEL=email` switches back.
+- Shareable demo: `apps/demo` builds one HTML file (`pnpm --filter demo build`) that runs the real booking rules in the browser with sample data. It needs no install or server and sends nothing anywhere.
+- Existing local data: run `pnpm db:reset` to pick up the new schema columns, Nael, Dr. Sreejit and the new rules.
+
+
 ## 2.0.0 (25 Nov 2026)
 
 Release 2 from the plan, minus Teams / Google Chat (waits on Fortes IT) and the Arabic interface (dropped by abd, 25 Nov).
