@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Bot, Send, Sparkles, X } from "lucide-react";
 import type { AssistantReply, Draft, Proposal, SlotCard } from "@/lib/server/assistant";
 import { fmtDateShort } from "@/lib/shared/format";
+import { LabIcon } from "./LabIcon";
 
 type MsgBody = { from: "me"; text: string } | { from: "bot"; reply: AssistantReply; done?: string; tick?: boolean };
 type Msg = MsgBody & { id: number };
@@ -253,7 +254,7 @@ function BotMessage(props: {
           {r.slots.map((s) => (
             <li key={`${s.resourceId}-${s.date}-${s.blockLabel}`}>
               <button type="button" className="bot-slot" onClick={() => props.onSlot(s)}>
-                <span className="swatch" style={{ background: `var(--r-${s.resourceId})` }} aria-hidden="true" />
+                <LabIcon colour={s.resourceId} />
                 <span className="bot-slot-main">
                   <strong>{s.resourceName}</strong>
                   <span className="small muted">{s.dateLabel} · {s.blockLabel}{s.time ? ` ${s.time}` : ""} · {s.inchargeName}{s.unitsLeft !== undefined ? ` · ${s.unitsLeft} carts free` : ""}</span>

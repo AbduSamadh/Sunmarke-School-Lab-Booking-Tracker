@@ -7,6 +7,7 @@ import { IssuesPanel } from "@/components/IssuesPanel";
 import { now } from "@/lib/server/util";
 import { fmtDateLong, fmtDateShort } from "@/lib/shared/format";
 import { SessionActions } from "@/components/SessionActions";
+import { LabIcon } from "@/components/LabIcon";
 import { addLeave, addMeeting, blockTime, cancelLeave, removeBlackout } from "./actions";
 
 export default async function InchargePage({ searchParams }: { searchParams: Promise<{ who?: string; saved?: string; error?: string; leave?: string }> }) {
@@ -70,7 +71,7 @@ export default async function InchargePage({ searchParams }: { searchParams: Pro
               </div>
               <div className="what">
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <span className="swatch" style={{ background: `var(--r-${b.resourceColour})` }} aria-hidden="true" />
+                  <LabIcon colour={b.resourceColour} />
                   <strong>{b.resourceName}</strong>
                   {b.cartCount ? <span>{b.cartCount} carts to {b.classroom}</span> : null}
                   {who === "all" && <span className="tag">{b.inchargeName}</span>}

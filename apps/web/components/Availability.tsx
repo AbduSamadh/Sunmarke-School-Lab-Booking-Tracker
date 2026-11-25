@@ -1,10 +1,11 @@
 "use client";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Ban, ChevronLeft, ChevronRight, CircleCheck, Lock, Star } from "lucide-react";
 import type { CellView, GridData, GridDay, GridBlock } from "@/lib/server/grid";
 import { dayName, dayNum, fmtDateLong, fmtDateShort, monthName } from "@/lib/shared/format";
 import { BookingSheet, type Selection } from "./BookingSheet";
+import { LabIcon } from "./LabIcon";
 
 type Resource = GridData["resources"][number];
 
@@ -39,6 +40,7 @@ export function Availability(props: {
   maxLeadDays: number;
   people: { id: string; name: string; department: string }[];
   selfId: string;
+  greeting?: string;
 }) {
   const { grid, date, today, resourceFilter, role } = props;
   const router = useRouter();
@@ -82,9 +84,16 @@ export function Availability(props: {
 
   return (
     <div>
-      <div className="page-head">
+      <div className="page-head hero">
         <div>
-          <h1>{res ? `${res.name}, week of ${fmtDateShort(mon)}` : "Book a lab or AI Carts"}</h1>
+          {props.greeting && !res && <p className="eyebrow">{props.greeting}</p>}
+          <h1>
+            {res ? (
+              <span className="res-title"><LabIcon colour={res.colour} size="lg" />{res.name}, week of {fmtDateShort(mon)}</span>
+            ) : (
+              <>Book a lab or <span className="hl">AI Carts</span></>
+            )}
+          </h1>
           <p className="muted" style={{ margin: 0 }}>
             {readOnly
               ? "Read-only view of lab availability."
@@ -115,7 +124,7 @@ export function Availability(props: {
           </a>
           {grid.resources.map((r) => (
             <a key={r.id} className="chip" href={href(date, r.id)} aria-current={resourceFilter === r.id ? "true" : undefined}>
-              <span className="swatch" style={{ background: `var(--r-${r.colour})` }} aria-hidden="true" />
+              <LabIcon colour={r.colour} />
               {r.name}
             </a>
           ))}
@@ -128,6 +137,7 @@ export function Availability(props: {
             <a key={d.date} href={href(d.date)} className={`day-tab${d.date === today ? " today" : ""}`} aria-current={d.date === day.date ? "true" : undefined}>
               <span>{dayName(d.date)}</span>
               <strong>{dayNum(d.date)}</strong>
+              {d.date === today && <span className="today-badge" aria-hidden="true">Today</span>}
               <span className="sr-only">{monthName(d.date)}{d.date === today ? ", today" : ""}</span>
             </a>
           ))}
@@ -152,9 +162,10 @@ export function Availability(props: {
       </div>
 
       <div className="legend" aria-label="Key">
-        <span>○ Free: shows who is coming</span>
-        <span>● Booked</span>
-        <span>× Unavailable, with the reason</span>
+        <span className="lg lg-free"><CircleCheck size={15} aria-hidden="true" /> Free: shows who is coming</span>
+        <span className="lg lg-mine"><Star size={15} aria-hidden="true" /> Your booking</span>
+        <span className="lg"><Lock size={15} aria-hidden="true" /> Booked</span>
+        <span className="lg lg-un"><Ban size={15} aria-hidden="true" /> Unavailable, with the reason</span>
         {day.timetableName && day.timetableName !== "Standard" && <span>Timetable: {day.timetableName}</span>}
       </div>
 
@@ -203,18 +214,21 @@ function Cell({ r, d, b, c, onOpen, selected }: { r: Resource; d: GridDay; b: Gr
     c.kind === "free" ? "cell-free" : c.kind === "booked" ? (c.mine ? "cell-booked cell-mine" : "cell-booked") : `cell-un${soft ? " soft" : ""}${c.mineId ? " cell-mine" : ""}`;
   const label = `${r.name}, ${fmtDateShort(d.date)}, ${b.code} ${b.start} to ${b.end}: ${t.st}. ${t.sub}`;
   const clickable = c.kind === "free" || (c.kind === "booked" && c.mine) || (c.kind === "booked" && !c.mine) || (c.kind === "unavailable" && (c.canWaitlist || Boolean(c.mineId)));
+  const mine = (c.kind === "booked" && c.mine) || (c.kind === "unavailable" && Boolean(c.mineId));
+  const Icon = mine ? Star : c.kind === "free" ? CircleCheck : c.kind === "booked" ? Lock : Ban;
+  const style = { "--lab": `var(--r-${r.colour})` } as React.CSSProperties;
   const inner = (
     <>
-      <span className="st">{t.st}</span>
+      <span className="st"><Icon className="st-icon" size={15} strokeWidth={2.4} aria-hidden="true" />{t.st}</span>
       {t.sub && <span className="sub">{t.sub}</span>}
     </>
   );
   return clickable ? (
-    <button type="button" className={`cell ${cls}${selected ? " sel" : ""}`} aria-label={label} onClick={(e) => onOpen(r, d, b, c, e.currentTarget)}>
+    <button type="button" className={`cell ${cls}${selected ? " sel" : ""}`} aria-label={label} style={style} onClick={(e) => onOpen(r, d, b, c, e.currentTarget)}>
       {inner}
     </button>
   ) : (
-    <div className={`cell ${cls}`} aria-label={label} role="img">
+    <div className={`cell ${cls}`} aria-label={label} role="img" style={style}>
       {inner}
     </div>
   );
@@ -234,8 +248,11 @@ function DayTable({ grid, day, onOpen, sel }: { grid: GridData; day: GridDay; on
           {grid.resources.map((r) => (
             <th key={r.id} scope="col">
               <span className="res-head">
-                <span className="swatch" style={{ background: `var(--r-${r.colour})` }} aria-hidden="true" />
-                {r.name}
+                <LabIcon colour={r.colour} size="md" />
+                <span className="res-name">
+                  {r.name}
+                  {r.location && <span className="res-loc">{r.location}</span>}
+                </span>
               </span>
             </th>
           ))}
@@ -284,7 +301,7 @@ function DayList({ grid, day, onOpen, sel }: { grid: GridData; day: GridDay; onO
             {grid.resources.map((r) => (
               <div key={r.id} style={{ display: "flex", borderBottom: "1px solid var(--line)", alignItems: "stretch" }}>
                 <div style={{ width: 112, flex: "none", padding: "8px 10px", fontSize: 14, display: "flex", alignItems: "center", gap: 6, background: "var(--surface-2)" }}>
-                  <span className="swatch" style={{ background: `var(--r-${r.colour})` }} aria-hidden="true" />
+                  <LabIcon colour={r.colour} />
                   {r.name.replace(" Lab", "")}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>

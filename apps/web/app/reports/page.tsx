@@ -6,6 +6,8 @@ import { getSettings } from "@/lib/server/world";
 import { now } from "@/lib/server/util";
 import { fmtDateShort } from "@/lib/shared/format";
 import { PrintButton } from "@/components/PrintButton";
+import { LabIcon } from "@/components/LabIcon";
+import { CalendarCheck, Gauge, Laptop, Ban, Users, UserX, Hourglass, Star, type LucideIcon } from "lucide-react";
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
@@ -51,14 +53,14 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       </form>
 
       <div className="kpis" role="list">
-        <Kpi v={String(rep.kpis.sessions)} l="Sessions" />
-        <Kpi v={pct(rep.kpis.roomUtilisation)} l="Lab utilisation" />
-        <Kpi v={pct(rep.kpis.cartUtilisation)} l="Cart utilisation" />
-        <Kpi v={String(rep.kpis.turnedAway)} l="Requests turned away" />
-        <Kpi v={String(rep.kpis.teachers)} l="Teachers booking" />
-        <Kpi v={pct(rep.kpis.noShowRate)} l="No-show rate" />
-        <Kpi v={`${rep.kpis.medianLeadDays.toFixed(1)} d`} l="Median booking lead time" />
-        <Kpi v={rep.feedback.count ? `${rep.feedback.avg.toFixed(1)} / 5` : "–"} l={`Session rating${rep.feedback.count ? ` (${rep.feedback.count})` : ""}`} />
+        <Kpi v={String(rep.kpis.sessions)} l="Sessions" icon={CalendarCheck} />
+        <Kpi v={pct(rep.kpis.roomUtilisation)} l="Lab utilisation" icon={Gauge} />
+        <Kpi v={pct(rep.kpis.cartUtilisation)} l="Cart utilisation" icon={Laptop} />
+        <Kpi v={String(rep.kpis.turnedAway)} l="Requests turned away" icon={Ban} />
+        <Kpi v={String(rep.kpis.teachers)} l="Teachers booking" icon={Users} />
+        <Kpi v={pct(rep.kpis.noShowRate)} l="No-show rate" icon={UserX} />
+        <Kpi v={`${rep.kpis.medianLeadDays.toFixed(1)} d`} l="Median booking lead time" icon={Hourglass} />
+        <Kpi v={rep.feedback.count ? `${rep.feedback.avg.toFixed(1)} / 5` : "–"} l={`Session rating${rep.feedback.count ? ` (${rep.feedback.count})` : ""}`} icon={Star} />
       </div>
 
       <div className="cols">
@@ -73,7 +75,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               <tbody>
                 {rep.utilisation.map((u) => (
                   <tr key={u.id}>
-                    <td>{u.name}</td>
+                    <td><span className="res-head"><LabIcon colour={u.colour} size="xs" />{u.name}</span></td>
                     <td className="num">{u.sessions}</td>
                     <td className="num small">{u.type === "cart_pool" ? `${u.unitBlocks} cart-blocks / ${u.bookableBlocks * 10}` : `${u.bookedBlocks} / ${u.bookableBlocks}`}</td>
                     <td>
@@ -202,9 +204,10 @@ function ratingText(avg: number | null, n: number) {
   return avg === null ? "No ratings" : `${avg.toFixed(1)} / 5 (${n})`;
 }
 
-function Kpi({ v, l }: { v: string; l: string }) {
+function Kpi({ v, l, icon: Icon }: { v: string; l: string; icon?: LucideIcon }) {
   return (
     <div className="kpi" role="listitem">
+      {Icon && <span className="kpi-icon" aria-hidden="true"><Icon size={18} /></span>}
       <div className="v">{v}</div>
       <div className="l">{l}</div>
     </div>

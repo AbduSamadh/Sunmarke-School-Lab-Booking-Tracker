@@ -1,16 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import "@fontsource/ibm-plex-sans/400.css";
-import "@fontsource/ibm-plex-sans/500.css";
-import "@fontsource/ibm-plex-sans/600.css";
-import "@fontsource/ibm-plex-sans/700.css";
+import "@fontsource-variable/plus-jakarta-sans";
+import "@fontsource-variable/bricolage-grotesque";
 import "@sunmarke/ui-tokens/tokens.css";
 import "./globals.css";
+import "./sunlit.css";
 import { currentActor } from "@/lib/server/auth";
 import { Nav } from "@/components/Nav";
 import { RegisterSW } from "@/components/RegisterSW";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Motion } from "@/components/Motion";
 import { Assistant } from "@/components/Assistant";
+import { Avatar, SunMark } from "@/components/LabIcon";
 import { cookies } from "next/headers";
 
 export const metadata: Metadata = {
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   description: "Book Sunmarke's labs and AI Carts.",
   manifest: "/manifest.webmanifest",
 };
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#1d4e89" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#4338ca" };
 export const dynamic = "force-dynamic";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -35,16 +35,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <header className="topbar">
           <div className="topbar-inner">
             <a className="brand" href="/">
-              <span className="brand-mark" aria-hidden="true">S</span>
-              <span>Sunmarke Labs</span>
+              <SunMark />
+              <span className="brand-word">Sunmarke<span>Labs</span></span>
             </a>
             {actor && <Nav role={actor.role} />}
             {!actor && <div style={{ flex: 1 }} />}
             <ThemeToggle initial={theme} />
             {actor && (
               <div className="who">
-                <span className="who-name">{actor.name}</span>
-                <span className="tag">{roleLabel(actor.role)}</span>
+                <Avatar name={actor.name} />
+                <span className="who-text">
+                  <span className="who-name">{actor.name}</span>
+                  <span className="who-role">{roleLabel(actor.role)}</span>
+                </span>
                 <form action="/api/v1/session/signout" method="post">
                   <button className="btn btn-quiet btn-sm" type="submit">Sign out</button>
                 </form>
