@@ -2,9 +2,10 @@ import { redirect } from "next/navigation";
 import { currentActor } from "@/lib/server/auth";
 import { getDb } from "@/lib/server/db";
 
-export default async function SignIn({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  if (await currentActor()) redirect("/");
-  const { error } = await searchParams;
+export default async function SignIn({ searchParams }: { searchParams: Promise<{ error?: string; next?: string }> }) {
+  const { error, next: nextRaw } = await searchParams;
+  const next = nextRaw && /^\/(?![/\\])[\w\-/?=&.]*$/.test(nextRaw) ? nextRaw : "";
+  if (await currentActor()) redirect(next || "/");
   const db = await getDb();
   const people = await db.query<{ name: string; email: string; role: string; department: string }>(
     "SELECT name, email, role, department FROM staff WHERE active ORDER BY CASE role WHEN 'teacher' THEN 1 WHEN 'incharge' THEN 2 WHEN 'admin' THEN 3 ELSE 4 END, name",
@@ -19,6 +20,7 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
         </div>
       )}
       <form className="panel" action="/api/v1/session" method="post">
+        {next && <input type="hidden" name="next" value={next} />}
         <div className="field">
           <label htmlFor="email">Work email</label>
           <input id="email" name="email" type="email" autoComplete="email" required placeholder="name@sunmarke.example" />
@@ -42,6 +44,7 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
             </div>
             <form action="/api/v1/session" method="post">
               <input type="hidden" name="email" value={p.email} />
+              {next && <input type="hidden" name="next" value={next} />}
               <button className="btn btn-sm" type="submit">Sign in as {p.name.split(" ")[0]}</button>
             </form>
           </li>

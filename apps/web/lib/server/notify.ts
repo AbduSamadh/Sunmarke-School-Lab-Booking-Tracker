@@ -108,6 +108,11 @@ export async function sendBookingEmail(db: Db, template: EmailTemplate, b: Booki
       break;
   }
 
+  if (template === "confirmed") {
+    const l = await db.query<{ links: { label: string; url: string }[] }>("SELECT links FROM resources WHERE id = $1", [b.resourceId]);
+    const links = l[0]?.links ?? [];
+    if (links.length) paragraphs.push(`Lesson resources: ${links.map((x) => `${x.label} (${x.url})`).join("; ")}.`);
+  }
   const { html, text } = renderEmail({ heading, rows: rows(b), paragraphs, action });
   const list = template === "waitlist_offer" && extra.to ? [extra.to] : recipients;
   for (const addr of [...new Set(list)]) {

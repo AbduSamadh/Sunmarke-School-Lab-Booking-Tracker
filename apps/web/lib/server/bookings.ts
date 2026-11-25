@@ -67,6 +67,9 @@ export interface BookingDetail {
   status: BookingStatus;
   statusReason: string | null;
   createdAt: Date;
+  recurrenceId: string | null;
+  checkedInAt: Date | null;
+  rating: number | null;
 }
 
 type Row = {
@@ -74,12 +77,14 @@ type Row = {
   teacher_id: string; teacher_name: string; teacher_email: string; department: string; incharge_id: string; incharge_name: string; incharge_email: string;
   cross_cover: boolean; subject: string; year_group: string; section: string; student_count: number; cart_count: number | null; classroom: string | null;
   objective: string; lesson_plan_url: string | null; special_requirements: string; status: BookingStatus; status_reason: string | null; created_at: Date;
+  recurrence_id: string | null; checked_in_at: Date | null; rating: number | null;
 };
 
 const SELECT = `
 SELECT b.*, r.name AS resource_name, r.type AS resource_type, r.colour,
   t.name AS teacher_name, t.email AS teacher_email, t.department,
-  i.name AS incharge_name, i.email AS incharge_email
+  i.name AS incharge_name, i.email AS incharge_email,
+  (SELECT f.rating FROM feedback f WHERE f.booking_id = b.id) AS rating
 FROM bookings b
 JOIN resources r ON r.id = b.resource_id
 JOIN staff t ON t.id = b.teacher_id
@@ -130,6 +135,9 @@ async function toDetails(db: Db, rows: Row[]): Promise<BookingDetail[]> {
       status: r.status,
       statusReason: r.status_reason,
       createdAt: new Date(r.created_at),
+      recurrenceId: r.recurrence_id ?? null,
+      checkedInAt: r.checked_in_at ? new Date(r.checked_in_at) : null,
+      rating: r.rating ?? null,
     };
   });
 }

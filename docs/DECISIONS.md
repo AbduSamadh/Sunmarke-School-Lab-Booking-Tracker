@@ -27,14 +27,24 @@ Version 0.1 was built from `docs/PLAN.md` before decisions D1 to D10 were signed
 - **No Turborepo yet.** pnpm workspaces alone are enough for one app.
 - **Jobs run in-process from a Postgres table** (retries with backoff, alert after 3 failures). A host cron calls `POST /api/v1/cron` with `CRON_SECRET`; Inngest can replace this later.
 
-## Included early from Release 1.1
+## Release 1.1 (built 25 Nov 2026)
 
-- Waitlist: join from any booked or blocked slot; the first teacher waiting is emailed when the slot frees. The 2 h acceptance hold is recorded but not yet enforced.
+Everything in Release 1.1 that does not need Fortes IT is built. Assumptions made, all changeable in Admin › Rules:
 
-## Not built yet
+- **Waitlist hold:** when a slot frees, the first teacher waiting gets it held for 2 hours, and only if they could actually book it (window, quota). Unclaimed offers pass to the next teacher.
+- **Fair-use quota:** off by default (0). When on, it counts blocks per teacher and per department per Monday-to-Sunday week. Admin can always book past it.
+- **Recurring bookings:** every 1 to 4 weeks, up to 120 days ahead (longer than the normal 4-week window, which is the point of a series). The teacher sees every date first; dates that are not free are skipped, not forced. Each date is a normal booking with its own email, and the whole series can be cancelled at once.
+- **Leave and cover:** an in-charge (or admin) marks leave by day or block. Affected bookings move to the other in-charge when free; otherwise the teacher gets a "no cover" email, admin gets an alert, and the booking stays until admin decides. Removing leave does not move bookings back.
+- **Admin reassign:** pick a person or "whoever is free". The teacher and both in-charges are emailed and calendars updated.
+- **QR check-in and no-shows:** one printable QR code per lab door. Check-in opens 15 min before the start. A lab session with no check-in 10 min after the start becomes a no-show; carts are delivered, so they are never marked.
+- **Feedback and equipment log:** teachers rate a session 1 to 5 after it starts (one email asks, once) and can report an equipment problem. In-charges can take a lab out of use while an issue is open; marking it fixed reopens the lab. High-severity issues email admin.
+- **Reports:** ratings and equipment issues per lab, and a print view (the browser's "Save as PDF" makes the PDF). A weekly summary email goes to admin and leadership on Sunday evening.
+- **Lesson links:** admin adds links per lab (safety rules, guides); they show in the booking sheet and the confirmation email.
+- **Offline:** the PWA caches only the app shell and shows an offline page. Pages and bookings are never cached, because lab devices are shared and availability must be live.
 
-- Real SSO (Auth.js with Google or Entra), real calendar and email adapters (waiting on D3 and IT access).
-- Admin reassigning a booking to another in-charge, and booking on behalf of a teacher in the UI (the server supports `onBehalfOf`).
-- Offline service worker for the PWA (the manifest is in place, so it can be added to a home screen).
-- Release 1.1 items other than the waitlist: recurring bookings, quotas, QR check-in, feedback, equipment log, leave and cover, PDF reports.
-- Error monitoring (Sentry), backups, k6 load test.
+## Waiting on Fortes IT
+
+- Real sign-in (Google Workspace and Microsoft 365 SSO), replacing the placeholder email sign-in. **Do not deploy publicly before this.**
+- Google and Microsoft calendar adapters (read busy times, write events) and a sending account for email. The simulated calendar and outbox stand in until then.
+- Hosting in the UAE (D9), backups, error monitoring and a scheduler calling `/api/v1/cron`.
+- Teams or Google Chat notifications.

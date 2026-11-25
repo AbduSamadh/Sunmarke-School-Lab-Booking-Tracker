@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.0 (25 Nov 2026)
+
+Release 1.1 from the plan, minus anything that needs Fortes IT (see DECISIONS.md).
+
+- Waitlist offers now hold the slot for the first teacher for 2 hours; expired offers pass to the next teacher.
+- Fair-use quotas per teacher and per department per week (off by default).
+- Recurring bookings: "Repeat this lesson" in the booking sheet, a preview of every date, then one tap to book; cancel a whole series from My bookings.
+- Admin books on behalf of a teacher, and reassigns any booking to another in-charge (Admin › Bookings).
+- In-charge leave with automatic cover by the other in-charge; uncovered bookings email the teacher and admin.
+- QR check-in per lab door (Admin › QR codes, printable), and automatic no-shows for lab sessions with no check-in.
+- Post-session rating and equipment problem report; equipment log with "out of use" blocking (In-charge page and Admin › Equipment).
+- Lesson resource links per lab, shown when booking and in the confirmation email.
+- Reports: ratings and equipment per lab, print or save as PDF. Weekly summary email to admin and leadership.
+- PWA offline page and asset cache. Sign-in returns you to the page you were going to (used by the QR codes).
+- Rules engine: 11 new tests (32 total); server: 10 new tests (21 total). axe WCAG A/AA clean on every new screen, light and dark.
+
 ## 0.1.0 (25 Nov 2026)
 
 First working version from the build plan, with D1–D10 on the plan's proposed defaults (see DECISIONS.md).

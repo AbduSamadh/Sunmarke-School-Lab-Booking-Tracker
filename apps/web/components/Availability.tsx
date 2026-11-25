@@ -37,6 +37,8 @@ export function Availability(props: {
   defaults: Defaults;
   minLeadHours: number;
   maxLeadDays: number;
+  people: { id: string; name: string; department: string }[];
+  selfId: string;
 }) {
   const { grid, date, today, resourceFilter, role } = props;
   const router = useRouter();
@@ -165,6 +167,9 @@ export function Availability(props: {
           onClose={close}
           onPick={(s) => setSel(s)}
           grid={grid}
+          people={props.people}
+          selfId={props.selfId}
+          maxLeadDays={props.maxLeadDays}
         />
       )}
       <style>{`.mobile-only{display:none}@media (max-width:760px){.desktop-only{display:none}.mobile-only{display:block}}`}</style>

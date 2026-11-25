@@ -41,10 +41,11 @@ docs/               PLAN.md (the build plan), DECISIONS.md, CHANGELOG.md
 | Path | Who | What |
 |---|---|---|
 | `/` | everyone | Week grid of labs × blocks. Every unavailable cell says why. Pick a lab chip for its week view. |
-| `/bookings` | teachers | Upcoming and past bookings; edit details, cancel, rebook. |
-| `/incharge` | in-charges, admin | Today's timeline with attendance, next 7 days, block time, simulated calendar meetings. |
-| `/admin` | admin | Labs and carts, timetables, blackouts, staff CSV import, rules, calendar and jobs, audit log. |
-| `/reports` | admin, leadership | Utilisation, in-charge load, demand turned away, busiest blocks, by department; CSV export. |
+| `/bookings` | teachers | Upcoming and past bookings; edit details, cancel, cancel a series, rebook, rate a session and report equipment. |
+| `/incharge` | in-charges, admin | Today's timeline with attendance, next 7 days, block time, leave with automatic cover, equipment log, simulated calendar meetings. |
+| `/admin` | admin | Labs and carts (with lesson links), bookings (reassign), equipment, timetables, blackouts, staff CSV import, rules (window, quotas, waitlist hold, no-shows), QR codes, calendar and jobs, audit log. |
+| `/checkin/:code` | everyone | Lab-door QR code lands here; one tap marks the class as arrived. |
+| `/reports` | admin, leadership | Utilisation, in-charge load, demand turned away, busiest blocks, by department, ratings and equipment; CSV export and print to PDF. |
 | `/outbox` | admin, in-charges | Every email the app would have sent, with calendar invites. |
 
 ## API (v1)
@@ -56,7 +57,12 @@ All JSON, session cookie auth, validated with zod (`apps/web/lib/shared/schemas.
 - `POST /api/v1/bookings/:id/cancel | attendance | decline`
 - `GET /api/v1/alternatives?resourceId&date&blockId`
 - `POST /api/v1/waitlist`
-- `POST /api/v1/cron?tasks=jobs,reminders,conflicts,digest` (bearer `CRON_SECRET` or admin)
+- `POST /api/v1/series` (preview by default; `preview: false` books), `POST /api/v1/series/:id/cancel`
+- `POST /api/v1/bookings/:id/feedback`, `POST /api/v1/bookings/:id/reassign` (admin)
+- `POST /api/v1/absences`, `DELETE /api/v1/absences/:id`
+- `GET|POST /api/v1/issues`, `POST /api/v1/issues/:id/resolve`
+- `POST /api/v1/checkin`
+- `POST /api/v1/cron?tasks=jobs,reminders,conflicts,offers,noshow,feedback,digest,weekly` (bearer `CRON_SECRET` or admin). Every 15 min: the default set. 07:00: `digest`. Sunday 18:00: `weekly`.
 - `GET /api/v1/reports/export?table=bookings|utilisation|load|department`
 
 ## Environment

@@ -127,7 +127,7 @@ describe("feedback and equipment", () => {
     await expect(submitFeedback(db, omar, a.booking.id, { rating: 5, comment: "" })).rejects.toMatchObject({ status: 403 });
     const r = await submitFeedback(db, sara, a.booking.id, { rating: 4, comment: "Good", issue: "Projector flickers", item: "Projector" });
     expect(r.issueId).toBeTruthy();
-    const issues = await db.query("SELECT * FROM equipment_issues WHERE status = 'open'");
+    const issues = await db.query("SELECT * FROM equipment_issues WHERE status = 'open' AND booking_id = $1", [a.booking.id]);
     expect(issues).toHaveLength(1);
   });
   it("an issue can block the lab until it is resolved", async () => {

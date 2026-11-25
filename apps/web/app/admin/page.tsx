@@ -3,19 +3,26 @@ import { requireActor } from "@/lib/server/auth";
 import { getDb } from "@/lib/server/db";
 import { getAssignments, getBlackouts, getResources, getSettings, getStaff, getTimetables } from "@/lib/server/world";
 import { currentConflicts } from "@/lib/server/scheduled";
-import { getBookingDetail } from "@/lib/server/bookings";
+import { getBookingDetail, listBookings } from "@/lib/server/bookings";
+import { ensureCheckinCodes } from "@/lib/server/release11";
+import { IssuesPanel } from "@/components/IssuesPanel";
+import QRCode from "qrcode";
+import { PrintButton } from "@/components/PrintButton";
 import { now } from "@/lib/server/util";
 import { fmtDateShort } from "@/lib/shared/format";
 import { StaffImport } from "@/components/StaffImport";
 import { blockTime, removeBlackout } from "../incharge/actions";
-import { addResource, addTimetable, retireTimetable, saveResource, saveRules, setStaffActive, toggleCalendarOutage } from "./actions";
+import { addResource, addTimetable, reassign, retireTimetable, saveLinks, saveResource, saveRules, setStaffActive, toggleCalendarOutage } from "./actions";
 
 const TABS = [
   ["resources", "Labs and carts"],
+  ["bookings", "Bookings"],
+  ["issues", "Equipment"],
   ["timetables", "Timetables"],
   ["blackouts", "Blackout dates"],
   ["staff", "Staff"],
   ["rules", "Rules"],
+  ["qr", "QR codes"],
   ["system", "Calendar and jobs"],
   ["audit", "Audit log"],
 ] as const;
@@ -87,6 +94,22 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               </tbody>
             </table>
           </div>
+          <section className="panel">
+            <h2>Lesson resources</h2>
+            <p className="small muted">Links teachers see when they book and in the confirmation email: safety rules, lesson ideas, how-to guides. One per line, as &ldquo;Label | https://&hellip;&rdquo;.</p>
+            <div className="cols">
+              {resources.map((r) => (
+                <form key={r.id} action={saveLinks}>
+                  <input type="hidden" name="id" value={r.id} />
+                  <div className="field">
+                    <label htmlFor={`links-${r.id}`}>{r.name}</label>
+                    <textarea id={`links-${r.id}`} name="links" rows={3} defaultValue={r.links.map((l) => `${l.label} | ${l.url}`).join("\n")} />
+                  </div>
+                  <button className="btn btn-sm" type="submit">Save links</button>
+                </form>
+              ))}
+            </div>
+          </section>
           <section className="panel">
             <h2>Add a lab or cart pool</h2>
             <form action={addResource}>
@@ -211,12 +234,28 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <div className="field"><label htmlFor="r-cancel">Cancel up to (hours before)</label><input id="r-cancel" name="cancelCutoffHours" type="number" min={0} defaultValue={settings.cancelCutoffHours} /></div>
               <div className="field"><label htmlFor="r-carts">Most carts per booking</label><input id="r-carts" name="maxCartsPerBooking" type="number" min={1} defaultValue={settings.maxCartsPerBooking} /></div>
             </div>
+            <h3 style={{ marginTop: 8 }}>Fair use</h3>
+            <div className="row2">
+              <div className="field"><label htmlFor="r-qt">Blocks per teacher per week</label><input id="r-qt" name="quotaPerTeacherWeek" type="number" min={0} defaultValue={settings.quotaPerTeacherWeek} /></div>
+              <div className="field"><label htmlFor="r-qd">Blocks per department per week</label><input id="r-qd" name="quotaPerDeptWeek" type="number" min={0} defaultValue={settings.quotaPerDeptWeek} /></div>
+            </div>
+            <p className="small muted">0 means no limit. Turn this on only if demand outgrows the labs; the admin can always book past it.</p>
+            <h3 style={{ marginTop: 8 }}>Waitlist, series and attendance</h3>
+            <div className="row3">
+              <div className="field"><label htmlFor="r-hold">Hold a freed slot for (hours)</label><input id="r-hold" name="waitlistHoldHours" type="number" min={1} defaultValue={settings.waitlistHoldHours} /></div>
+              <div className="field"><label htmlFor="r-rec">Series can run up to (days)</label><input id="r-rec" name="recurringMaxDays" type="number" min={7} defaultValue={settings.recurringMaxDays} /></div>
+              <div className="field"><label htmlFor="r-ns">No-show after (minutes)</label><input id="r-ns" name="autoNoShowMinutes" type="number" min={0} defaultValue={settings.autoNoShowMinutes} /></div>
+            </div>
+            <p className="small muted">A lab session with no QR check-in that many minutes after the start is marked as a no-show (0 turns this off). Carts are delivered, so they are never marked.</p>
             <p className="small muted">Admins can always book outside the window; those bookings are marked as overrides in the audit log.</p>
             <button className="btn btn-primary" type="submit">Save rules</button>
           </form>
         </section>
       )}
 
+      {tab === "bookings" && <BookingsTab />}
+      {tab === "issues" && <IssuesPanel db={db} resources={resources} back="/admin?tab=issues" today={today} />}
+      {tab === "qr" && <QrTab />}
       {tab === "system" && <SystemTab down={settings.mockCalendarDown} />}
       {tab === "audit" && <AuditTab />}
     </div>
@@ -300,6 +339,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <div className="btn-row">
             <form action="/api/v1/cron?tasks=jobs,reminders,conflicts" method="post"><input type="hidden" name="x" value="1" /><button className="btn" type="submit">Run reminders, retries and clash check</button></form>
             <form action="/api/v1/cron?tasks=digest" method="post"><input type="hidden" name="x" value="1" /><button className="btn" type="submit">Send today&apos;s 07:00 digest</button></form>
+            <form action="/api/v1/cron?tasks=offers,noshow,feedback" method="post"><input type="hidden" name="x" value="1" /><button className="btn" type="submit">Expire offers, mark no-shows, ask for ratings</button></form>
+            <form action="/api/v1/cron?tasks=weekly" method="post"><input type="hidden" name="x" value="1" /><button className="btn" type="submit">Send last week&apos;s report</button></form>
           </div>
         </section>
         <section>
@@ -340,6 +381,75 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             </div>
           )}
         </section>
+      </div>
+    );
+  }
+
+  async function BookingsTab() {
+    const list = await listBookings(db, { from: today, to: addDays(today, settings.maxLeadDays + 7), status: ["confirmed"] });
+    const people = staff.filter((s) => s.active && (s.role === "incharge" || s.role === "admin"));
+    return (
+      <div className="stack">
+        <p className="muted">Move a booking to another in-charge. &ldquo;Whoever is free&rdquo; tries the usual pair first. The teacher and both in-charges are emailed and calendars are updated.</p>
+        {list.length === 0 ? (
+          <div className="empty">No upcoming bookings.</div>
+        ) : (
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr><th>When</th><th>Lab</th><th>Teacher and class</th><th>In-charge</th><th>Reassign to</th></tr>
+              </thead>
+              <tbody>
+                {list.map((b) => (
+                  <tr key={b.id}>
+                    <td className="tnum">{fmtDateShort(b.date)} {b.blockLabel}<div className="small muted">{b.timeLabel}</div></td>
+                    <td>{b.resourceName}{b.cartCount ? ` · ${b.cartCount} carts` : ""}</td>
+                    <td>{b.teacherName}<div className="small muted">{b.classLabel} · {b.subject}</div></td>
+                    <td>{b.inchargeName}{b.crossCover ? <span className="small muted"> (cover)</span> : null}</td>
+                    <td>
+                      <form action={reassign} className="btn-row">
+                        <input type="hidden" name="id" value={b.id} />
+                        <label className="sr-only" htmlFor={`ra-${b.id}`}>New in-charge for {b.resourceName} {fmtDateShort(b.date)} {b.blockLabel}</label>
+                        <select id={`ra-${b.id}`} name="staffId" defaultValue="auto">
+                          <option value="auto">Whoever is free</option>
+                          {people.filter((p) => p.id !== b.inchargeId).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                        <label className="sr-only" htmlFor={`rr-${b.id}`}>Reason</label>
+                        <input id={`rr-${b.id}`} name="reason" type="text" maxLength={120} placeholder="Reason" style={{ width: 130 }} />
+                        <button className="btn btn-sm" type="submit">Move</button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  async function QrTab() {
+    await ensureCheckinCodes(db);
+    const rows = (await getResources(db)).filter((r) => r.active && r.type === "room" && r.checkinCode);
+    const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+    const codes = await Promise.all(rows.map(async (r) => ({ r, url: `${appUrl}/checkin/${r.checkinCode}`, svg: await QRCode.toString(`${appUrl}/checkin/${r.checkinCode}`, { type: "svg", margin: 1, errorCorrectionLevel: "M" }) })));
+    return (
+      <div className="stack">
+        <div className="btn-row no-print">
+          <p className="muted" style={{ margin: 0, flex: 1 }}>Print these and stick one by each lab door. Teachers scan it at the start of the lesson to mark attendance; sessions with no scan become no-shows after {settings.autoNoShowMinutes} minutes.</p>
+          <PrintButton />
+        </div>
+        <div className="qr-sheet">
+          {codes.map(({ r, url, svg }) => (
+            <div key={r.id} className="qr-card">
+              <h2 style={{ marginBottom: 0 }}>{r.name}</h2>
+              <div className="small muted">Scan to check in</div>
+              <div role="img" aria-label={`QR code for ${r.name} check-in`} dangerouslySetInnerHTML={{ __html: svg }} />
+              <div className="small muted" style={{ wordBreak: "break-all" }}>{url}</div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

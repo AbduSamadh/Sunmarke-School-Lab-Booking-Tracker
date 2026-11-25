@@ -140,4 +140,31 @@ async function seedHistory(db: Db) {
       }
     }
   }
+  // Release 1.1 demo data: check-in codes, lesson links, a few ratings and equipment issues.
+  for (const r of await db.query<{ id: string }>("SELECT id FROM resources WHERE checkin_code IS NULL"))
+    await db.query("UPDATE resources SET checkin_code = $2 WHERE id = $1", [r.id, `${r.id}-${newId("c").slice(-6)}`]);
+  await db.query("UPDATE resources SET links = $2::jsonb WHERE id = $1 AND links = '[]'::jsonb", [
+    "quantum",
+    JSON.stringify([{ label: "Lab safety rules", url: "https://example.org/sunmarke/quantum-safety" }]),
+  ]);
+  await db.query("UPDATE resources SET links = $2::jsonb WHERE id = $1 AND links = '[]'::jsonb", [
+    "carts",
+    JSON.stringify([{ label: "AI Cart quick start", url: "https://example.org/sunmarke/ai-carts" }]),
+  ]);
+  const done = await db.query<{ id: string; teacher_id: string; resource_id: string }>("SELECT id, teacher_id, resource_id FROM bookings WHERE status = 'completed' ORDER BY id");
+  for (const [i, b] of done.entries()) {
+    if (i % 3 !== 0) continue;
+    await db.query("INSERT INTO feedback (booking_id, teacher_id, rating, comment) VALUES ($1,$2,$3,'') ON CONFLICT DO NOTHING", [b.id, b.teacher_id, i % 9 === 0 ? 3 : i % 2 ? 5 : 4]);
+  }
+  const issues = await db.query("SELECT 1 FROM equipment_issues LIMIT 1");
+  if (!issues.length) {
+    await db.query(
+      "INSERT INTO equipment_issues (id, resource_id, item, title, detail, severity, reported_by, created_at) VALUES ($1,'xreal','Headset 4','Will not charge','Tried two cables.','medium','t-sara',$2)",
+      [newId("iss"), new Date(now().getTime() - 3 * 86_400_000).toISOString()],
+    );
+    await db.query(
+      "INSERT INTO equipment_issues (id, resource_id, item, title, detail, severity, reported_by, created_at) VALUES ($1,'carts','Cart 7','Two laptops missing chargers','','low','ram',$2)",
+      [newId("iss"), new Date(now().getTime() - 86_400_000).toISOString()],
+    );
+  }
 }
