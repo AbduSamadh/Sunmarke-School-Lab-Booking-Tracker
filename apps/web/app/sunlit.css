@@ -6,12 +6,12 @@
    ===================================================================== */
 
 /* ---------- typography ---------- */
-body { font-feature-settings: "ss01", "cv11"; letter-spacing: -0.005em; }
+body { letter-spacing: 0; }
 h1, h2, .kpi .v, .day-tab strong, .brand-word, .bot-head h2, .list .when strong, .display {
   font-family: var(--font-display);
   font-optical-sizing: auto;
 }
-h1 { font-size: var(--fs-xl); font-weight: 700; letter-spacing: -0.03em; line-height: 1.08; margin-bottom: 6px; }
+h1 { font-size: var(--fs-xl); font-weight: 700; letter-spacing: -0.015em; line-height: 1.08; margin-bottom: 6px; }
 h2 { font-size: var(--fs-lg); font-weight: 650; letter-spacing: -0.02em; }
 h3 { font-weight: 650; }
 .eyebrow { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); }
@@ -31,7 +31,7 @@ body { background-color: var(--bg); background-image: radial-gradient(color-mix(
 .topbar { background: var(--surface); border-bottom: 1px solid var(--line); }
 .topbar-inner { min-height: 64px; gap: 20px; }
 .brand { gap: 10px; }
-.brand-word { font-size: 19px; font-weight: 700; letter-spacing: -0.03em; color: var(--text); }
+.brand-word { font-size: 19px; font-weight: 700; letter-spacing: -0.015em; color: var(--text); }
 .brand-word span { color: var(--accent); margin-left: 4px; font-weight: 600; }
 .sun-mark { display: block; flex: none; }
 .sun-mark-bg { fill: var(--accent); }
@@ -135,7 +135,7 @@ button.cell-free:hover::before { transform: scaleY(1); }
 /* ---------- reports ---------- */
 .kpis { gap: 12px; background: none; border: 0; overflow: visible; }
 .kpi { position: relative; border: 1px solid var(--line); border-radius: 14px; padding: 16px; box-shadow: var(--shadow); }
-.kpi .v { font-size: 32px; font-weight: 700; letter-spacing: -0.03em; }
+.kpi .v { font-size: 32px; font-weight: 700; letter-spacing: -0.015em; }
 .kpi-icon { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; margin-bottom: 10px; color: var(--k); background: color-mix(in srgb, var(--k) 14%, var(--surface)); }
 .kpi { --k: var(--accent); }
 .kpi:nth-child(5n+2) { --k: var(--r-dollarx); } .kpi:nth-child(5n+3) { --k: var(--r-carts); }
@@ -222,12 +222,12 @@ button.cell-free:hover::before { transform: scaleY(1); }
 /* ---------- landing ---------- */
 .landing { display: flex; flex-direction: column; gap: 56px; padding-top: 8px; }
 .lp-hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 40px; align-items: center; min-height: 520px; }
-.lp-hero h1 { font-size: clamp(40px, 5.6vw, 68px); line-height: 1.02; letter-spacing: -0.04em; margin: 6px 0 18px; }
+.lp-hero h1 { font-size: clamp(40px, 5.6vw, 68px); line-height: 1.02; letter-spacing: -0.015em; margin: 6px 0 18px; }
 .lp-lead { font-size: 18px; line-height: 1.55; color: var(--text-2); max-width: 46ch; margin-bottom: 26px; }
 .lp-stats { display: grid; grid-template-columns: repeat(4, auto); justify-content: start; gap: 8px 32px; margin: 34px 0 0; padding-top: 22px; border-top: 1px solid var(--line); }
 .lp-stats div { display: flex; flex-direction: column-reverse; }
 .lp-stats dt { font-size: 13px; color: var(--text-2); font-weight: 600; }
-.lp-stats dd { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; }
+.lp-stats dd { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.1; }
 
 .lp-art { position: relative; aspect-ratio: 1; width: min(100%, 470px); justify-self: center; }
 .ribbon-globe { width: 100%; height: 100%; display: block; filter: drop-shadow(0 30px 40px rgba(16, 32, 64, .28)); animation: globe-in 900ms var(--spring) both; }
@@ -254,7 +254,7 @@ button.cell-free:hover::before { transform: scaleY(1); }
 .lp-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; counter-reset: step; }
 .lp-steps li { position: relative; padding: 22px 20px 18px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); counter-increment: step; transition: transform 260ms var(--spring); }
 .lp-steps li:hover { transform: translateY(-4px); }
-.lp-steps li::after { content: counter(step, decimal-leading-zero); position: absolute; right: 18px; top: 14px; font-family: var(--font-display); font-size: 40px; font-weight: 800; letter-spacing: -0.04em; color: var(--surface-2); line-height: 1; }
+.lp-steps li::after { content: counter(step, decimal-leading-zero); position: absolute; right: 18px; top: 14px; font-family: var(--font-display); font-size: 40px; font-weight: 800; letter-spacing: -0.015em; color: var(--surface-2); line-height: 1; }
 .lp-steps h3 { font-family: var(--font-display); font-size: 18px; margin: 14px 0 6px; }
 .lp-steps p { margin: 0; font-size: 14.5px; }
 .lp-step-icon { display: inline-grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; background: var(--brand-navy); color: var(--brand-yellow); }
@@ -286,3 +286,13 @@ button.cell-free:hover::before { transform: scaleY(1); }
   .rg-spin, .lp-orbit { animation: none !important; }
   .rg-ribbon { stroke-dashoffset: 0; animation: none; }
 }
+
+/* ---------- fonts: Tektur (primary) + Nova Square (accent), abd 25 Nov 2026 ---------- */
+h1, h2, h3, .display { font-weight: 700; }
+.eyebrow, .tag, .who-role, .brand-app, .lp-stats dt, .day-tab > span, table.data th, .grid thead .rh,
+.today-badge, .kpi .l, .chip, .nav a, .lp-orbit, .legend, .bot-chips .chip, .res-loc, .person small {
+  font-family: var(--font-accent); font-weight: 400;
+}
+.eyebrow, table.data th, .grid thead .rh, .day-tab > span { letter-spacing: .08em; }
+.nav a[aria-current="page"], .chip[aria-current="true"] { font-weight: 400; }
+.grid .rh { width: 112px; } .grid .rh .time { white-space: nowrap; font-size: 12.5px; }

@@ -1,11 +1,12 @@
 /*
  * Sunmarke Lab Booking design tokens ("Sunlit", 25 Nov 2026).
  * Colours come from the Sunmarke School logo (navy ring, ribbon colours) that
- * abd supplied on 25 Nov 2026. Fonts are still our choice (D10).
+ * abd supplied on 25 Nov 2026. Fonts chosen by abd on 25 Nov 2026: Tektur (primary) and Nova Square (accent).
  */
 :root {
-  --font-sans: "Plus Jakarta Sans Variable", "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: "Bricolage Grotesque Variable", "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  --font-sans: "Tektur Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Tektur Variable", system-ui, sans-serif;
+  --font-accent: "Nova Square", "Tektur Variable", system-ui, sans-serif;
   --fs-sm: 14px; --fs-md: 16px; --fs-lg: 21px; --fs-xl: 34px;
 
   /* warm paper surfaces */

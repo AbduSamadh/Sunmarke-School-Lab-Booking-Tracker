@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import "@fontsource-variable/plus-jakarta-sans";
-import "@fontsource-variable/bricolage-grotesque";
+import "@fontsource-variable/tektur";
+import "@fontsource/nova-square";
 import "@sunmarke/ui-tokens/tokens.css";
 import "./globals.css";
 import "./sunlit.css";
