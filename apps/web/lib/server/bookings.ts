@@ -1,0 +1,380 @@
+import type { Db } from "@sunmarke/db";
+import { isUniqueViolation } from "@sunmarke/db";
+import {
+  alternatives,
+  blockInterval,
+  canCancel,
+  evaluate,
+  timetableForDate,
+  type Alternative,
+  type Block,
+  type BlockedCode,
+} from "@sunmarke/rules";
+import type { BookingInput, BookingPatch } from "../shared/schemas";
+import { audit } from "./audit";
+import { enqueue, runJobs } from "./jobs";
+import { loadWorld, getSettings, getTimetables } from "./world";
+import { newId, now } from "./util";
+import { sendBookingEmail } from "./notify";
+
+export interface Actor {
+  id: string;
+  name: string;
+  email: string;
+  role: "teacher" | "incharge" | "admin" | "viewer";
+  department: string;
+}
+
+export class AppError extends Error {
+  constructor(public status: number, public code: string, message: string) {
+    super(message);
+  }
+}
+
+export type BookingStatus = "confirmed" | "cancelled" | "completed" | "no_show" | "declined";
+
+export interface BookingDetail {
+  id: string;
+  resourceId: string;
+  resourceName: string;
+  resourceType: "room" | "cart_pool";
+  resourceColour: string;
+  date: string;
+  blockIds: string[];
+  blockLabel: string; // "P3" or "P3–P4"
+  timeLabel: string; // "09:55–10:50"
+  start: Date;
+  end: Date;
+  teacherId: string;
+  teacherName: string;
+  teacherEmail: string;
+  department: string;
+  inchargeId: string;
+  inchargeName: string;
+  inchargeEmail: string;
+  crossCover: boolean;
+  subject: string;
+  yearGroup: string;
+  section: string;
+  classLabel: string; // "Y8 B"
+  studentCount: number;
+  cartCount: number | null;
+  classroom: string | null;
+  objective: string;
+  lessonPlanUrl: string | null;
+  specialRequirements: string;
+  status: BookingStatus;
+  statusReason: string | null;
+  createdAt: Date;
+}
+
+type Row = {
+  id: string; resource_id: string; resource_name: string; resource_type: "room" | "cart_pool"; colour: string; date: string; block_ids: string[];
+  teacher_id: string; teacher_name: string; teacher_email: string; department: string; incharge_id: string; incharge_name: string; incharge_email: string;
+  cross_cover: boolean; subject: string; year_group: string; section: string; student_count: number; cart_count: number | null; classroom: string | null;
+  objective: string; lesson_plan_url: string | null; special_requirements: string; status: BookingStatus; status_reason: string | null; created_at: Date;
+};
+
+const SELECT = `
+SELECT b.*, r.name AS resource_name, r.type AS resource_type, r.colour,
+  t.name AS teacher_name, t.email AS teacher_email, t.department,
+  i.name AS incharge_name, i.email AS incharge_email
+FROM bookings b
+JOIN resources r ON r.id = b.resource_id
+JOIN staff t ON t.id = b.teacher_id
+JOIN staff i ON i.id = b.incharge_id`;
+
+async function toDetails(db: Db, rows: Row[]): Promise<BookingDetail[]> {
+  if (rows.length === 0) return [];
+  const [timetables, settings] = await Promise.all([getTimetables(db), getSettings(db)]);
+  const allBlocks = new Map<string, Block>();
+  for (const t of timetables) for (const b of t.blocks) allBlocks.set(b.id, b);
+  return rows.map((r) => {
+    const blocks = r.block_ids.map((id) => allBlocks.get(id)).filter(Boolean) as Block[];
+    blocks.sort((a, b) => a.start.localeCompare(b.start));
+    const first = blocks[0];
+    const last = blocks[blocks.length - 1];
+    const start = first ? blockInterval(r.date, first, settings).start : new Date(`${r.date}T00:00:00Z`);
+    const end = last ? blockInterval(r.date, last, settings).end : start;
+    return {
+      id: r.id,
+      resourceId: r.resource_id,
+      resourceName: r.resource_name,
+      resourceType: r.resource_type,
+      resourceColour: r.colour,
+      date: r.date,
+      blockIds: r.block_ids,
+      blockLabel: blocks.length > 1 ? `${first.code}–${last.code}` : (first?.code ?? "?"),
+      timeLabel: first ? `${first.start}–${last.end}` : "",
+      start,
+      end,
+      teacherId: r.teacher_id,
+      teacherName: r.teacher_name,
+      teacherEmail: r.teacher_email,
+      department: r.department,
+      inchargeId: r.incharge_id,
+      inchargeName: r.incharge_name,
+      inchargeEmail: r.incharge_email,
+      crossCover: r.cross_cover,
+      subject: r.subject,
+      yearGroup: r.year_group,
+      section: r.section,
+      classLabel: `${r.year_group}${r.section ? ` ${r.section}` : ""}`,
+      studentCount: r.student_count,
+      cartCount: r.cart_count,
+      classroom: r.classroom,
+      objective: r.objective,
+      lessonPlanUrl: r.lesson_plan_url,
+      specialRequirements: r.special_requirements,
+      status: r.status,
+      statusReason: r.status_reason,
+      createdAt: new Date(r.created_at),
+    };
+  });
+}
+
+export async function getBookingDetail(db: Db, id: string): Promise<BookingDetail | null> {
+  const rows = await db.query<Row>(`${SELECT} WHERE b.id = $1`, [id]);
+  return (await toDetails(db, rows))[0] ?? null;
+}
+
+export async function listBookings(db: Db, f: { teacherId?: string; inchargeId?: string; from?: string; to?: string; status?: BookingStatus[] } = {}) {
+  const where: string[] = [];
+  const p: unknown[] = [];
+  if (f.teacherId) { p.push(f.teacherId); where.push(`b.teacher_id = $${p.length}`); }
+  if (f.inchargeId) { p.push(f.inchargeId); where.push(`b.incharge_id = $${p.length}`); }
+  if (f.from) { p.push(f.from); where.push(`b.date >= $${p.length}`); }
+  if (f.to) { p.push(f.to); where.push(`b.date <= $${p.length}`); }
+  if (f.status?.length) { p.push(f.status); where.push(`b.status = ANY($${p.length})`); }
+  const rows = await db.query<Row>(`${SELECT} ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY b.date, b.block_ids[1]`, p);
+  const d = await toDetails(db, rows);
+  return d.sort((a, b) => a.start.getTime() - b.start.getTime());
+}
+
+// ---------------------------------------------------------------------------
+// Create (R1–R8 via the rules engine, R7 via unique indexes in one transaction)
+// ---------------------------------------------------------------------------
+
+export type CreateResult =
+  | { ok: true; booking: BookingDetail; calendarChecked: boolean }
+  | { ok: false; code: BlockedCode | "just_taken"; reason: string; suggestion?: string; canWaitlist: boolean; alternatives: Alternative[] };
+
+export async function createBooking(db: Db, actor: Actor, input: BookingInput, opts: { onBehalfOf?: string; runJobsNow?: boolean } = {}): Promise<CreateResult> {
+  if (actor.role === "viewer") throw new AppError(403, "forbidden", "Leadership viewers cannot book.");
+  const override = actor.role === "admin" && input.overrideWindow === true;
+  const teacherId = actor.role === "admin" && opts.onBehalfOf ? opts.onBehalfOf : actor.id;
+  const t = now();
+  const req = {
+    resourceId: input.resourceId,
+    date: input.date,
+    blockIds: input.blockIds,
+    units: input.cartCount ?? 1,
+    now: t,
+    overrideWindow: override,
+  };
+
+  // Live check with fresh calendar free/busy (R2).
+  const world = await loadWorld(db, input.date, input.date);
+  const resource = world.resources.find((r) => r.id === input.resourceId);
+  if (resource?.type === "cart_pool") {
+    if (!input.cartCount) throw new AppError(422, "invalid", "Say how many carts you need.");
+    if (!input.classroom) throw new AppError(422, "invalid", "Say which classroom the carts go to.");
+  }
+  const pre = evaluate(world, req);
+  if (!pre.ok) {
+    await db.query("INSERT INTO booking_attempts (teacher_id, resource_id, date, block_id, code) VALUES ($1,$2,$3,$4,$5)", [
+      teacherId, input.resourceId, input.date, input.blockIds[0], pre.code,
+    ]);
+    return { ...pre, alternatives: alternatives(world, req) };
+  }
+
+  const id = newId("bk");
+  try {
+    await db.transaction(async (tx) => {
+      // Serialise writers on this resource, then re-check with the latest holds.
+      await tx.query("SELECT id FROM resources WHERE id = $1 FOR UPDATE", [input.resourceId]);
+      const fresh = await loadWorld(db, input.date, input.date, { tx, skipCalendar: true });
+      const ev = evaluate({ ...fresh, busy: world.busy }, req);
+      if (!ev.ok) throw new JustTaken(ev.reason);
+      await tx.query(
+        `INSERT INTO bookings (id, resource_id, date, block_ids, teacher_id, incharge_id, subject, year_group, section, student_count,
+          cart_count, classroom, objective, lesson_plan_url, special_requirements, status, cross_cover, created_by, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'confirmed',$16,$17,$18,$18)`,
+        [
+          id, input.resourceId, input.date, input.blockIds, teacherId, ev.inchargeId, input.subject, input.yearGroup, input.section,
+          input.studentCount, resource?.type === "cart_pool" ? input.cartCount : null, resource?.type === "cart_pool" ? input.classroom : null,
+          input.objective, input.lessonPlanUrl || null, input.specialRequirements, ev.crossCover, actor.id, t.toISOString(),
+        ],
+      );
+      for (const blockId of input.blockIds) {
+        await tx.query(
+          "INSERT INTO booking_slots (booking_id, incharge_id, resource_id, room_key, date, block_id, units) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+          [id, ev.inchargeId, input.resourceId, resource?.type === "room" ? input.resourceId : null, input.date, blockId, resource?.type === "cart_pool" ? input.cartCount : 1],
+        );
+      }
+      await audit(tx, { actorId: actor.id, action: override ? "booking.create.override" : "booking.create", entity: "booking", entityId: id, after: { ...input, inchargeId: ev.inchargeId } });
+      await tx.query("UPDATE waitlist SET status = 'booked' WHERE teacher_id = $1 AND resource_id = $2 AND date = $3 AND block_id = ANY($4) AND status IN ('waiting','offered')", [
+        teacherId, input.resourceId, input.date, input.blockIds,
+      ]);
+      await enqueue(tx, { kind: "calendar.upsert", bookingId: id });
+      await enqueue(tx, { kind: "email", template: "confirmed", bookingId: id, to: "both" });
+    });
+  } catch (e) {
+    if (e instanceof JustTaken || isUniqueViolation(e)) {
+      await db.query("INSERT INTO booking_attempts (teacher_id, resource_id, date, block_id, code) VALUES ($1,$2,$3,$4,'just_taken')", [
+        teacherId, input.resourceId, input.date, input.blockIds[0],
+      ]);
+      const w2 = await loadWorld(db, input.date, input.date);
+      return {
+        ok: false,
+        code: "just_taken",
+        reason: "Just taken: someone booked this a moment ago.",
+        canWaitlist: true,
+        alternatives: alternatives(w2, req),
+      };
+    }
+    throw e;
+  }
+  if (opts.runJobsNow !== false) await runJobs(db).catch(() => undefined);
+  const booking = (await getBookingDetail(db, id))!;
+  return { ok: true, booking, calendarChecked: world.calendarChecked };
+}
+
+class JustTaken extends Error {}
+
+// ---------------------------------------------------------------------------
+// Authorisation helpers (T16)
+// ---------------------------------------------------------------------------
+
+async function loadForChange(db: Db, actor: Actor, id: string, allow: "owner" | "incharge") {
+  const b = await getBookingDetail(db, id);
+  if (!b) throw new AppError(404, "not_found", "Booking not found.");
+  const isOwner = b.teacherId === actor.id;
+  const isIncharge = b.inchargeId === actor.id || actor.role === "incharge";
+  const ok = actor.role === "admin" || (allow === "owner" ? isOwner : isIncharge && actor.role !== "teacher");
+  if (!ok) {
+    await audit(db, { actorId: actor.id, action: "authz.denied", entity: "booking", entityId: id, after: { allow } });
+    throw new AppError(403, "forbidden", "You can only change your own bookings.");
+  }
+  return b;
+}
+
+async function releaseSlots(db: Db, id: string) {
+  await db.query("UPDATE booking_slots SET active = false WHERE booking_id = $1", [id]);
+}
+
+/** R9: free the slot, tell calendars, offer the waitlist. */
+async function afterRelease(db: Db, b: BookingDetail) {
+  await enqueue(db, { kind: "calendar.delete", bookingId: b.id });
+  const waiting = await db.query<{ id: string; email: string }>(
+    `SELECT w.id, s.email FROM waitlist w JOIN staff s ON s.id = w.teacher_id
+     WHERE w.resource_id = $1 AND w.date = $2 AND w.block_id = ANY($3) AND w.status = 'waiting' ORDER BY w.created_at LIMIT 1`,
+    [b.resourceId, b.date, b.blockIds],
+  );
+  if (waiting[0]) {
+    const t = now();
+    await db.query("UPDATE waitlist SET status = 'offered', offered_at = $2, expires_at = $3 WHERE id = $1", [
+      waiting[0].id, t.toISOString(), new Date(t.getTime() + 2 * 3_600_000).toISOString(),
+    ]);
+    await sendBookingEmail(db, "waitlist_offer", b, "teacher", { to: waiting[0].email });
+  }
+}
+
+export async function cancelBooking(db: Db, actor: Actor, id: string, opts: { undo?: boolean } = {}) {
+  const b = await loadForChange(db, actor, id, "owner");
+  if (b.status !== "confirmed") throw new AppError(409, "not_active", "This booking is not active.");
+  const t = now();
+  const settings = await getSettings(db);
+  const tts = await getTimetables(db);
+  const first = timetableForDate(tts, b.date)?.blocks.find((x) => x.id === b.blockIds[0]);
+  const isUndo = opts.undo === true && t.getTime() - b.createdAt.getTime() < 15_000;
+  if (actor.role !== "admin" && !isUndo && first && !canCancel(b.date, first, t, settings))
+    throw new AppError(409, "too_late", `Bookings can be cancelled up to ${settings.cancelCutoffHours} h before. Contact the lab in-charge.`);
+  await db.transaction(async (tx) => {
+    await tx.query("UPDATE bookings SET status = 'cancelled', status_reason = $2, updated_at = $3 WHERE id = $1", [id, isUndo ? "undo" : null, t.toISOString()]);
+    await tx.query("UPDATE booking_slots SET active = false WHERE booking_id = $1", [id]);
+    await audit(tx, { actorId: actor.id, action: isUndo ? "booking.undo" : "booking.cancel", entity: "booking", entityId: id, before: { status: b.status } });
+  });
+  if (!isUndo) await enqueue(db, { kind: "email", template: "cancelled", bookingId: id, to: "both", extra: { by: actor.name } });
+  await afterRelease(db, b);
+  await runJobs(db).catch(() => undefined);
+  return getBookingDetail(db, id);
+}
+
+export async function declineBooking(db: Db, actor: Actor, id: string, reason: string) {
+  const b = await loadForChange(db, actor, id, "incharge");
+  if (b.status !== "confirmed") throw new AppError(409, "not_active", "This booking is not active.");
+  await db.transaction(async (tx) => {
+    await tx.query("UPDATE bookings SET status = 'declined', status_reason = $2, updated_at = $3 WHERE id = $1", [id, reason, now().toISOString()]);
+    await tx.query("UPDATE booking_slots SET active = false WHERE booking_id = $1", [id]);
+    await audit(tx, { actorId: actor.id, action: "booking.decline", entity: "booking", entityId: id, after: { reason } });
+  });
+  await enqueue(db, { kind: "email", template: "declined", bookingId: id, to: "teacher", extra: { reason } });
+  await afterRelease(db, b);
+  await runJobs(db).catch(() => undefined);
+  return getBookingDetail(db, id);
+}
+
+export async function updateBooking(db: Db, actor: Actor, id: string, patch: BookingPatch) {
+  const b = await loadForChange(db, actor, id, "owner");
+  if (b.status !== "confirmed") throw new AppError(409, "not_active", "This booking is not active.");
+  const map: Record<keyof BookingPatch, string> = {
+    subject: "subject", yearGroup: "year_group", section: "section", studentCount: "student_count", classroom: "classroom",
+    objective: "objective", lessonPlanUrl: "lesson_plan_url", specialRequirements: "special_requirements",
+  };
+  const sets: string[] = [];
+  const p: unknown[] = [id];
+  const changed: string[] = [];
+  for (const [k, v] of Object.entries(patch) as [keyof BookingPatch, unknown][]) {
+    if (v === undefined) continue;
+    p.push(v === "" && k === "lessonPlanUrl" ? null : v);
+    sets.push(`${map[k]} = $${p.length}`);
+    changed.push(k.replace(/([A-Z])/g, " $1").toLowerCase());
+  }
+  if (sets.length === 0) return b;
+  p.push(now().toISOString());
+  await db.query(`UPDATE bookings SET ${sets.join(", ")}, updated_at = $${p.length} WHERE id = $1`, p);
+  await audit(db, { actorId: actor.id, action: "booking.update", entity: "booking", entityId: id, before: b, after: patch });
+  await enqueue(db, { kind: "calendar.upsert", bookingId: id });
+  await enqueue(db, { kind: "email", template: "changed", bookingId: id, to: "both", extra: { what: changed.join(", ") } });
+  await runJobs(db).catch(() => undefined);
+  return getBookingDetail(db, id);
+}
+
+export async function setAttendance(db: Db, actor: Actor, id: string, status: "completed" | "no_show") {
+  const b = await loadForChange(db, actor, id, "incharge");
+  if (!["confirmed", "completed", "no_show"].includes(b.status)) throw new AppError(409, "not_active", "This booking was cancelled.");
+  if (b.start.getTime() > now().getTime() + 30 * 60_000) throw new AppError(409, "too_early", "Attendance can be marked from 30 minutes before the session.");
+  await db.query("UPDATE bookings SET status = $2, updated_at = $3 WHERE id = $1", [id, status, now().toISOString()]);
+  await audit(db, { actorId: actor.id, action: `booking.${status}`, entity: "booking", entityId: id, before: { status: b.status } });
+  return getBookingDetail(db, id);
+}
+
+export async function joinWaitlist(db: Db, actor: Actor, input: { resourceId: string; date: string; blockId: string; units?: number }) {
+  if (actor.role === "viewer") throw new AppError(403, "forbidden", "Leadership viewers cannot book.");
+  const existing = await db.query<{ id: string }>(
+    "SELECT id FROM waitlist WHERE teacher_id = $1 AND resource_id = $2 AND date = $3 AND block_id = $4 AND status = 'waiting'",
+    [actor.id, input.resourceId, input.date, input.blockId],
+  );
+  if (existing[0]) return { id: existing[0].id, position: await waitPosition(db, existing[0].id) };
+  const id = newId("wl");
+  await db.query("INSERT INTO waitlist (id, resource_id, date, block_id, teacher_id, units) VALUES ($1,$2,$3,$4,$5,$6)", [
+    id, input.resourceId, input.date, input.blockId, actor.id, input.units ?? 1,
+  ]);
+  await db.query("INSERT INTO booking_attempts (teacher_id, resource_id, date, block_id, code) VALUES ($1,$2,$3,$4,'waitlist_join')", [
+    actor.id, input.resourceId, input.date, input.blockId,
+  ]);
+  await audit(db, { actorId: actor.id, action: "waitlist.join", entity: "waitlist", entityId: id, after: input });
+  return { id, position: await waitPosition(db, id) };
+}
+
+async function waitPosition(db: Db, id: string) {
+  const r = await db.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM waitlist w, waitlist me WHERE me.id = $1 AND w.resource_id = me.resource_id AND w.date = me.date
+     AND w.block_id = me.block_id AND w.status = 'waiting' AND w.created_at <= me.created_at`,
+    [id],
+  );
+  return r[0]?.n ?? 1;
+}
+
+export { releaseSlots };
