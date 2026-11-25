@@ -230,35 +230,14 @@ button.cell-free:hover::before { transform: scaleY(1); }
 .lp-stats dd { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.1; }
 
 .lp-art { position: relative; aspect-ratio: 1; width: min(100%, 470px); justify-self: center; }
-/* The real logo mark: never redrawn, recoloured or rotated. It only fades in,
-   floats gently, and has rings pulsing out from behind it. */
-.lp-mark { position: absolute; inset: 19%; display: block; border-radius: 50%; animation: mark-float 6s 2.4s ease-in-out infinite; filter: drop-shadow(0 24px 30px rgba(16, 32, 64, .30)); }
-.lp-mark img { width: 100%; height: 100%; display: block; }
-/* Logo build: vector mark traced from the logo. Every animation ends at its
-   resting state (no rotation, full paint), so the final frame is the logo. */
-.lb { position: absolute; inset: 0; display: block; cursor: pointer; }
-.lb-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; animation: globe-in 900ms var(--spring) both; }
-.lb-disc { transform-origin: 264px 264px; animation: lb-disc 650ms 150ms var(--spring) both; }
-.lb-ringline { transform-origin: 264px 264px; transform: rotate(-90deg); stroke-dasharray: 1; stroke-dashoffset: 1; animation: lb-draw 1000ms var(--ease-out) forwards; }
-.lb-spin { transform-origin: 264px 264px; animation: lb-spin 2600ms 250ms cubic-bezier(.2,.7,.2,1) both; }
-.lb-paint { stroke-dasharray: 1; stroke-dashoffset: 1; animation: lb-draw 900ms var(--ease-out) forwards; }
-[id^="lb-m-purple"] .lb-paint { animation-delay: 450ms; }
-[id^="lb-m-pink"] .lb-paint { animation-delay: 650ms; }
-[id^="lb-m-orange"] .lb-paint { animation-delay: 850ms; }
-[id^="lb-m-cyan"] .lb-paint { animation-delay: 1050ms; }
-[id^="lb-m-green"] .lb-paint { animation-delay: 1250ms; }
-[id^="lb-m-yellow"] .lb-paint { animation-delay: 1500ms; animation-duration: 800ms; }
-@keyframes globe-in { from { opacity: 0; transform: scale(.85); } }
-@keyframes lb-draw { to { stroke-dashoffset: 0; } }
-@keyframes lb-disc { from { transform: scale(0); } }
-@keyframes lb-spin { from { transform: rotate(-200deg); } to { transform: rotate(0deg); } }
-@media (prefers-reduced-motion: reduce) { .lb-svg, .lb-disc, .lb-spin { animation: none !important; } .lb-paint, .lb-ringline { animation: none !important; stroke-dashoffset: 0 !important; } }
-@keyframes mark-in { from { opacity: 0; transform: scale(.7); } }
-@keyframes mark-float { 50% { transform: translateY(-10px); } }
-.lp-ring { position: absolute; inset: 19%; border-radius: 50%; border: 2px solid var(--brand-navy); opacity: 0; animation: ring-out 4.5s 2.2s ease-out infinite; }
-.lp-ring-2 { border-color: var(--brand-yellow); border-width: 3px; animation-delay: 3.7s; }
-.lp-ring-3 { border-color: var(--brand-cyan); animation-delay: 5.2s; }
-@keyframes ring-out { 0% { opacity: .55; transform: scale(1); } 100% { opacity: 0; transform: scale(1.55); } }
+.ribbon-globe { width: 100%; height: 100%; display: block; overflow: visible; filter: drop-shadow(0 30px 40px rgba(16, 32, 64, .28)); animation: globe-in 900ms var(--spring) both; }
+@keyframes globe-in { from { opacity: 0; transform: scale(.85) rotate(-20deg); } }
+/* One smooth spin that comes to rest at 0deg: the final frame is the logo's orientation. */
+.rg-spin { transform-origin: 200px 200px; animation: rg-spin 2600ms cubic-bezier(.16, .8, .24, 1) both; }
+@keyframes rg-spin { from { transform: rotate(-150deg); } to { transform: rotate(0deg); } }
+.rg-ribbon { stroke-dasharray: 1; stroke-dashoffset: 1; animation: rg-draw 1400ms var(--ease-out) forwards; }
+.rg-r1 { animation-delay: 120ms; } .rg-r2 { animation-delay: 240ms; } .rg-r3 { animation-delay: 360ms; } .rg-r4 { animation-delay: 480ms; } .rg-r5 { animation-delay: 600ms; }
+@keyframes rg-draw { to { stroke-dashoffset: 0; } }
 .lp-orbit { position: absolute; display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 6px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 12px 28px -12px rgba(16, 32, 64, .35); font-weight: 650; font-size: 14px; white-space: nowrap; animation: orbit-in 600ms var(--spring) both, bob 5s ease-in-out infinite; }
 .lp-orbit-0 { left: -4%; top: 12%; animation-delay: 700ms, 0s; }
 .lp-orbit-1 { right: -6%; top: 6%; animation-delay: 800ms, -1s; }
@@ -305,8 +284,8 @@ button.cell-free:hover::before { transform: scaleY(1); }
 }
 @media (max-width: 520px) { .lp-steps, .lp-labs { grid-template-columns: 1fr; } .lp-art { width: 70%; } }
 @media (prefers-reduced-motion: reduce) {
-  .lp-orbit, .lp-mark { animation: none !important; }
-  .lp-ring { display: none; }
+  .rg-spin, .lp-orbit, .ribbon-globe { animation: none !important; }
+  .rg-ribbon { stroke-dashoffset: 0; animation: none; }
 }
 
 /* ---------- fonts: Tektur (primary) + Nova Square (accent), abd 25 Nov 2026 ---------- */
