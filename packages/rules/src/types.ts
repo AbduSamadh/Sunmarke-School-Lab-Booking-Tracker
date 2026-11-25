@@ -77,6 +77,20 @@ export interface Blackout {
   campusId?: string | null;
 }
 
+/**
+ * A lesson on the school's own weekly timetable that uses a lab (hybrid labs such as
+ * Strike, XReal and DollarX also host regular ICT lessons). The lab is not bookable then.
+ */
+export interface TimetabledLesson {
+  id: string;
+  resourceId: string;
+  /** ISO weekday, 1 = Monday. */
+  weekday: number;
+  blockCode: string;
+  /** Shown in the grid, e.g. "ICT Y8 B". */
+  label: string;
+}
+
 /** A busy interval from an in-charge's own calendar (meetings, leave...). */
 export interface BusyInterval {
   staffId: string;
@@ -133,6 +147,8 @@ export interface WorldState {
   offers?: WaitlistOffer[];
   /** In-charge leave or absence (R1.1 leave and cover). */
   absences?: Absence[];
+  /** Weekly timetabled lessons that occupy a lab (hybrid labs). */
+  lessons?: TimetabledLesson[];
 }
 
 export interface WaitlistOffer {
@@ -188,6 +204,7 @@ export type BlockedCode =
   | "window_too_far"
   | "in_past"
   | "blackout"
+  | "timetabled"
   | "resource_booked"
   | "not_enough_carts"
   | "invalid_units"

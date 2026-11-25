@@ -307,6 +307,17 @@ CREATE TABLE IF NOT EXISTS curriculum_levels (
 );
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS curriculum_ids text[] NOT NULL DEFAULT '{}';
 
+-- Release 2.1: weekly timetabled lessons in hybrid labs (Strike, XReal, DollarX host regular ICT lessons).
+CREATE TABLE IF NOT EXISTS timetabled_lessons (
+  id text PRIMARY KEY,
+  resource_id text NOT NULL REFERENCES resources(id),
+  weekday int NOT NULL CHECK (weekday BETWEEN 1 AND 7),
+  block_code text NOT NULL,
+  label text NOT NULL,
+  active boolean NOT NULL DEFAULT true
+);
+CREATE UNIQUE INDEX IF NOT EXISTS timetabled_lessons_slot ON timetabled_lessons (resource_id, weekday, block_code) WHERE active;
+
 -- Phone app: device tokens for push notifications (Expo push tokens).
 CREATE TABLE IF NOT EXISTS push_devices (
   token text PRIMARY KEY,

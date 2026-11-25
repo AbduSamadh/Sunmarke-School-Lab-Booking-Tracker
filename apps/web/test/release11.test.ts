@@ -143,7 +143,7 @@ describe("feedback and equipment", () => {
 
 describe("weekly report", () => {
   it("emails admin and leadership once per week", async () => {
-    expect(await sendWeeklyReport(db)).toBe(3); // Abd, Dr. Neil, Dr. Sreejit
+    expect(await sendWeeklyReport(db)).toBe(5); // Abd, Dr. Neil, Dr. Sreejit, the Principal and the BOD
     expect(await sendWeeklyReport(db)).toBe(0);
   });
 });

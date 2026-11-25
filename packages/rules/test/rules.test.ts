@@ -151,6 +151,17 @@ describe("rule matrix", () => {
     expect(evaluate(w, { ...req("quantum", "P2"), date: WED }).ok).toBe(true);
   });
 
+  it("T11b a timetabled ICT lesson takes a hybrid lab that period, every week", () => {
+    const w = world({ lessons: [{ id: "l1", resourceId: "strike", weekday: 2, blockCode: "P3", label: "ICT Y8 B" }] });
+    expect(evaluate(w, req("strike", "P3"))).toMatchObject({ ok: false, code: "timetabled", reason: "Timetabled: ICT Y8 B" });
+    expect(evaluate(w, { ...req("strike", "P3"), date: "2026-12-15" })).toMatchObject({ ok: false, code: "timetabled" });
+    expect(evaluate(w, req("strike", "P4")).ok).toBe(true);
+    expect(evaluate(w, { ...req("strike", "P3"), date: WED }).ok).toBe(true);
+    expect(evaluate(w, req("xreal", "P3")).ok).toBe(true);
+    const cell = cellStatus(w, w.resources.find((r) => r.id === "strike")!, TUE, S.blocks.find((b) => b.code === "P3")!, NOW);
+    expect(cell).toMatchObject({ state: "unavailable", code: "timetabled" });
+  });
+
   it("T12 Friday timetable shows only Friday blocks", () => {
     const friday: Timetable = {
       id: "tt-fri",

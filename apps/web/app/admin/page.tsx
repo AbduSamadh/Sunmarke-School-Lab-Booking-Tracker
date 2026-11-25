@@ -1,7 +1,7 @@
 import { addDays, localDate, timetableForDate } from "@sunmarke/rules";
 import { requireActor } from "@/lib/server/auth";
 import { getDb } from "@/lib/server/db";
-import { getAssignments, getBlackouts, getResources, getSettings, getStaff, getTimetables } from "@/lib/server/world";
+import { getAssignments, getBlackouts, getLessons, getResources, getSettings, getStaff, getTimetables } from "@/lib/server/world";
 import { currentConflicts } from "@/lib/server/scheduled";
 import { campusOf, getBookingDetail, listBookings } from "@/lib/server/bookings";
 import { ensureCheckinCodes } from "@/lib/server/release11";
@@ -10,9 +10,11 @@ import QRCode from "qrcode";
 import { PrintButton } from "@/components/PrintButton";
 import { now } from "@/lib/server/util";
 import { fmtDateShort } from "@/lib/shared/format";
+
+const DAY_ABBR = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 import { StaffImport } from "@/components/StaffImport";
 import { blockTime, removeBlackout } from "../incharge/actions";
-import { addCampus, addLevel, addResource, importLevels, saveLevel, addTimetable, reassign, retireTimetable, saveCampus, saveHubUrl, saveLinks, saveResource, saveRules, setStaffActive, setStaffCampus, toggleCalendarOutage } from "./actions";
+import { addCampus, addLevel, addResource, importLevels, saveLevel, addTimetable, reassign, retireTimetable, saveCampus, saveHubUrl, saveLessons, saveLinks, saveResource, saveRules, setStaffActive, setStaffCampus, toggleCalendarOutage } from "./actions";
 
 const TABS = [
   ["resources", "Labs and carts"],
@@ -40,12 +42,13 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const today = localDate(now(), settings);
   // Release 2: an admin works on one campus at a time; group admins switch campus in the top bar.
   const campus = campusOf(actor);
-  const [allResources, allStaff, assignments, allTimetables, campuses] = await Promise.all([
+  const [allResources, allStaff, assignments, allTimetables, campuses, lessons] = await Promise.all([
     getResources(db),
     getStaff(db),
     getAssignments(db),
     getTimetables(db),
     db.query<{ id: string; name: string; short_name: string; active: boolean; hub_url: string }>("SELECT id, name, short_name, active, hub_url FROM campuses ORDER BY sort, name"),
+    getLessons(db),
   ]);
   const resources = allResources.filter((r) => r.campusId === campus);
   const staff = actor.allCampuses ? allStaff : allStaff.filter((s) => s.campusId === campus);
@@ -137,6 +140,27 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                   <button className="btn btn-sm" type="submit">Save links</button>
                 </form>
               ))}
+            </div>
+          </section>
+          <section className="panel">
+            <h2>Timetabled lessons</h2>
+            <p className="small muted" id="tl-hint">
+              Regular lessons that use a lab every week, such as ICT in the hybrid labs. Those periods cannot be booked. One per line, as &ldquo;Mon P1 | ICT Y7 A&rdquo;. The lessons in place are sample data until the real ICT timetable is entered.
+            </p>
+            <div className="cols">
+              {resources.filter((r) => r.type === "room").map((r) => {
+                const mine = lessons.filter((l) => l.resourceId === r.id);
+                return (
+                  <form key={r.id} action={saveLessons}>
+                    <input type="hidden" name="id" value={r.id} />
+                    <div className="field">
+                      <label htmlFor={`lessons-${r.id}`}>{r.name} ({mine.length})</label>
+                      <textarea id={`lessons-${r.id}`} name="lessons" rows={5} aria-describedby="tl-hint" defaultValue={mine.map((l) => `${DAY_ABBR[l.weekday - 1]} ${l.blockCode} | ${l.label}`).join("\n")} />
+                    </div>
+                    <button className="btn btn-sm" type="submit">Save timetable</button>
+                  </form>
+                );
+              })}
             </div>
           </section>
           <section className="panel">

@@ -1,6 +1,6 @@
 # Lab in-charge guide
 
-Ram looks after Quantum and the AI Carts; Abdul looks after DollarX, XReal and Strike; Nael is the third in-charge for every lab. When the first choice is away or busy, a booking goes to the next one automatically.
+Ram and Nael look after Quantum and the AI Carts (Ram first, then Nael, then Abdul); Abdul looks after DollarX, XReal and Strike (then Ram, then Nael). DollarX, XReal and Strike also have regular ICT lessons, which are not booked through the app. When the first choice is away or busy, a booking goes to the next one automatically.
 
 **AI Carts:** each cart goes out with its own in-charge, so a class can book at most 3 carts. When 3 carts are out, all three of you are busy and no lab can be booked that period.
 

@@ -3,9 +3,9 @@ import {
   addDays, alternatives, blockInterval, canCancel, cellStatus, evaluate, isoWeekday, localDate, mondayOf,
   type Alternative, type CellStatus, type Evaluation, type WorldState,
 } from "@sunmarke/rules";
-import { ASSIGNMENTS, LABS, PEOPLE, SETTINGS, TIMETABLE, block, lab, person, SUBJECTS, YEARS, SECTIONS, type Booking, type DemoState, type Message } from "./data";
+import { ASSIGNMENTS, LABS, LESSONS, PEOPLE, SETTINGS, TIMETABLE, block, lab, person, SUBJECTS, YEARS, SECTIONS, type Booking, type DemoState, type Message } from "./data";
 
-const KEY = "slb-demo-v1";
+const KEY = "slb-demo-v2";
 export const now = () => new Date();
 export const today = () => localDate(now(), SETTINGS);
 
@@ -48,6 +48,7 @@ export function world(ignore?: string): WorldState {
       .filter((b) => (b.status === "confirmed" || b.status === "completed") && b.id !== ignore)
       .flatMap((b) => b.inchargeIds.map((inchargeId) => ({ bookingId: b.id, resourceId: b.resourceId, inchargeId, date: b.date, blockId: b.blockId, units: 1 }))),
     blackouts: [],
+    lessons: LESSONS,
     busy: [],
     settings: SETTINGS,
   };

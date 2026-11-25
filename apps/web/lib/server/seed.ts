@@ -17,8 +17,11 @@ const STAFF = [
   // abd, 25 Nov 2026: Nael is the third lab in-charge.
   ["nael", "Nael", "nael@sunmarke.example", "Labs", "incharge"],
   ["neil", "Dr. Neil", "neil@sunmarke.example", "Leadership", "viewer"],
-  // abd, 25 Nov 2026: Dr. Sreejit for SLT, the Principal's office and the Board of Directors.
-  ["sreejit", "Dr. Sreejit", "sreejit@sunmarke.example", "SLT, Principal and BOD", "viewer"],
+  // abd, 25 Nov 2026: leadership sign-ins for SLT (Dr. Sreejit), the Principal and the Board of Directors.
+  // The Principal and BOD names are placeholders until the real staff list arrives.
+  ["sreejit", "Dr. Sreejit", "sreejit@sunmarke.example", "SLT", "viewer"],
+  ["principal", "Principal", "principal@sunmarke.example", "Principal", "viewer"],
+  ["bod", "Board of Directors", "bod@sunmarke.example", "BOD", "viewer"],
   ["t-sara", "Sara Khan", "sara.khan@sunmarke.example", "Science", "teacher"],
   ["t-omar", "Omar Haddad", "omar.haddad@sunmarke.example", "Computing", "teacher"],
   ["t-priya", "Priya Nair", "priya.nair@sunmarke.example", "Primary", "teacher"],
@@ -35,39 +38,69 @@ const RESOURCES = [
   ["strike", "Strike Lab", "room", 1, "Senior block", 28, "strike", 5],
 ] as const;
 
-const SUBJECTS = ["Science", "Physics", "Chemistry", "Biology", "Computing", "Maths", "English", "Design & Technology", "Art", "Music", "Geography", "History", "Arabic", "Islamic Studies", "French", "Business", "PE", "Other"];
+/**
+ * Booking subjects, matched to the KS3 curriculum (abd, 25 Nov 2026): the national curriculum
+ * subjects for Y7 to Y9 plus the UAE's required Arabic, Islamic Studies and Moral, Social and
+ * Cultural Studies. Science is one subject at KS3, so Physics, Chemistry and Biology are not
+ * listed, and Business (a GCSE option) is dropped. "Other" asks the teacher to name it.
+ */
+export const SUBJECTS = ["Computing", "Science", "Maths", "English", "Design & Technology", "Art & Design", "Music", "Geography", "History", "Languages", "Citizenship", "PE", "Arabic", "Islamic Studies", "Moral, Social & Cultural Studies", "Other"];
 const YEARS = ["FS1", "FS2", ...Array.from({ length: 13 }, (_, i) => `Y${i + 1}`)];
 const SECTIONS = ["A", "B", "C", "D", "E", "F"];
 
 /**
- * SAMPLE KS3 levels so curriculum mapping can be tried. They are placeholders,
- * not Sunmarke's KS3 progressive plan: the lab admin replaces them in Admin ›
- * Curriculum (or imports the real plan as CSV) before tagging real lessons.
+ * SAMPLE KS3 levels so curriculum mapping can be tried, checked against the KS3 Computing
+ * programme of study (England, Y7 to Y9) on 25 Nov 2026 at abd's request: every level is a
+ * statement from that programme, spread across the three years. The national curriculum does
+ * not split KS3 by year, so the year is a suggested order. They are placeholders, not
+ * Sunmarke's KS3 progressive plan: the lab admin replaces them in Admin › Curriculum (or
+ * imports the real plan as CSV) before tagging real lessons.
  */
 export const SAMPLE_CURRICULUM: [code: string, strand: string, title: string, year: string][] = [
-  ["CT-7", "Computational thinking", "Break a problem into steps and draw it as a flowchart", "Y7"],
-  ["PR-7", "Programming", "Write and debug a short block-based program", "Y7"],
-  ["AI-7", "AI and data", "Sort and label data to train a simple classifier", "Y7"],
-  ["DM-7", "Digital making", "Build and test a simple circuit", "Y7"],
-  ["CT-8", "Computational thinking", "Use selection and loops to solve a problem", "Y8"],
-  ["PR-8", "Programming", "Move from blocks to text-based code", "Y8"],
-  ["AI-8", "AI and data", "Spot bias in a data set and explain its effect", "Y8"],
-  ["DM-8", "Digital making", "Program a microcontroller to read a sensor", "Y8"],
-  ["CT-9", "Computational thinking", "Compare two algorithms for the same task", "Y9"],
-  ["PR-9", "Programming", "Write functions and test them with sample data", "Y9"],
-  ["AI-9", "AI and data", "Evaluate an AI tool's output and its limits", "Y9"],
-  ["DM-9", "Digital making", "Design, build and present a working prototype", "Y9"],
+  ["CT-7", "Algorithms and computational thinking", "Use abstraction and decomposition to model a real-world problem", "Y7"],
+  ["PR-7", "Programming", "Write programs that use sequence, selection and repetition", "Y7"],
+  ["SY-7", "Computer systems and data", "Name the hardware and software parts of a computer system and how they communicate", "Y7"],
+  ["ES-7", "Online safety", "Keep your identity and privacy safe online, and know how to report concerns", "Y7"],
+  ["CT-8", "Algorithms and computational thinking", "Compare searching and sorting algorithms", "Y8"],
+  ["PR-8", "Programming", "Use a text-based language with lists and procedures to solve a problem", "Y8"],
+  ["SY-8", "Computer systems and data", "Represent numbers, text, images and sound in binary, and add binary numbers", "Y8"],
+  ["IT-8", "Creative projects", "Combine applications and devices to collect and analyse data for a user", "Y8"],
+  ["CT-9", "Algorithms and computational thinking", "Use logical reasoning to compare two algorithms for the same task", "Y9"],
+  ["PR-9", "Programming", "Write and test functions in two languages, at least one text-based", "Y9"],
+  ["SY-9", "Computer systems and data", "Use Boolean logic in circuits and programs, and explain how instructions are stored and run", "Y9"],
+  ["IT-9", "Creative projects", "Create and improve a digital product for an audience: trustworthy, well designed and usable", "Y9"],
 ];
+
+/**
+ * DUMMY weekly ICT timetable for the hybrid labs (abd, 25 Nov 2026): Strike, XReal and
+ * DollarX host regular ICT lessons, so only the other periods can be booked. Replace with
+ * the school's real ICT timetable. Weekday 1 = Monday.
+ */
+const ICT_PERIODS: Record<string, Record<number, string[]>> = {
+  strike: { 1: ["P1", "P2", "P5"], 2: ["P1", "P2", "P6"], 3: ["P3", "P4", "P7"], 4: ["P2", "P3", "P6"], 5: ["P1", "P4"] },
+  xreal: { 1: ["P3", "P4", "P7"], 2: ["P3", "P5", "P7"], 3: ["P1", "P5", "P6"], 4: ["P1", "P4", "P7"], 5: ["P2", "P5"] },
+  dollarx: { 1: ["P2", "P6"], 2: ["P2", "P3", "P7"], 3: ["P4", "P5"], 4: ["P3", "P6", "P7"], 5: ["P1", "P3", "P6"] },
+};
+export const ICT_LESSONS: { id: string; resourceId: string; weekday: number; blockCode: string; label: string }[] = Object.entries(ICT_PERIODS).flatMap(([resourceId, days], li) =>
+  Object.entries(days).flatMap(([wd, codes]) =>
+    codes.map((blockCode, i) => {
+      const n = li * 7 + Number(wd) * 3 + i;
+      return { id: `ict-${resourceId}-${wd}-${blockCode}`, resourceId, weekday: Number(wd), blockCode, label: `ICT Y${7 + (n % 5)} ${"ABCD"[n % 4]}` };
+    }),
+  ),
+);
 
 export async function seed(db: Db) {
   for (const s of STAFF)
     await db.query("INSERT INTO staff (id, name, email, department, role) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", [...s]);
   for (const r of RESOURCES)
     await db.query("INSERT INTO resources (id, name, type, units, location, capacity, colour, sort) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING", [...r]);
-  for (const [res, primary, fallback] of [
-    ["quantum", "ram", "abdul"], ["carts", "ram", "abdul"], ["dollarx", "abdul", "ram"], ["xreal", "abdul", "ram"], ["strike", "abdul", "ram"],
+  // abd, 25 Nov 2026: Nael works Quantum and the AI Carts with Ram (Ram, then Nael, then Abdul);
+  // for DollarX, XReal and Strike he steps in when Abdul and Ram are both busy.
+  for (const [res, ...order] of [
+    ["quantum", "ram", "nael", "abdul"], ["carts", "ram", "nael", "abdul"], ["dollarx", "abdul", "ram", "nael"], ["xreal", "abdul", "ram", "nael"], ["strike", "abdul", "ram", "nael"],
   ]) {
-    await db.query("INSERT INTO incharge_assignments VALUES ($1,$2,1),($1,$3,2),($1,'nael',3) ON CONFLICT DO NOTHING", [res, primary, fallback]);
+    for (const [i, who] of order.entries()) await db.query("INSERT INTO incharge_assignments VALUES ($1,$2,$3) ON CONFLICT DO NOTHING", [res, who, i + 1]);
   }
   const tt = standardTimetable();
   await db.query("INSERT INTO timetables (id, name, valid_from, valid_to, weekdays, priority) VALUES ($1,$2,NULL,NULL,$3,0) ON CONFLICT DO NOTHING", [tt.id, tt.name, tt.weekdays]);
@@ -82,7 +115,9 @@ export async function seed(db: Db) {
     await db.query("INSERT INTO curriculum_levels (id, code, strand, title, year_group, sort) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING", [`cl-${code.toLowerCase()}`, code, strand, title, year, i]);
   await db.query("INSERT INTO meta VALUES ('curriculum_sample', 'true') ON CONFLICT DO NOTHING");
   // Abd (lab admin) and Dr. Neil (leadership) can see every campus once there is more than one.
-  await db.query("UPDATE staff SET all_campuses = true WHERE id IN ('abd', 'neil', 'sreejit')");
+  await db.query("UPDATE staff SET all_campuses = true WHERE id IN ('abd', 'neil', 'sreejit', 'principal', 'bod')");
+  for (const l of ICT_LESSONS)
+    await db.query("INSERT INTO timetabled_lessons (id, resource_id, weekday, block_code, label) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", [l.id, l.resourceId, l.weekday, l.blockCode, l.label]);
 
   await seedHistory(db);
   await seedUpcoming(db);
@@ -114,7 +149,7 @@ async function seedUpcoming(db: Db) {
   // Today's sessions for the in-charge view, where the block has not started yet.
   if (isoWeekday(today) <= 5) {
     for (const [block, resourceId, teacher, extra] of [
-      ["P6", "quantum", "t-sara", { subject: "Physics", yearGroup: "Y7", section: "A", studentCount: 22 }],
+      ["P6", "quantum", "t-sara", { subject: "Science", yearGroup: "Y7", section: "A", studentCount: 22 }],
       ["P7", "carts", "t-mariam", { subject: "Geography", yearGroup: "Y6", section: "B", studentCount: 25, cartCount: 3, classroom: "Room 1.08" }],
     ] as const) {
       await createBooking(db, admin, { ...base, resourceId, date: today, blockIds: [P(block)], ...extra } as Parameters<typeof createBooking>[2], { onBehalfOf: teacher }).catch(() => undefined);
@@ -147,6 +182,7 @@ async function seedHistory(db: Db) {
         const units = resourceId === "carts" ? 1 + Math.floor(rnd() * 3) : 1;
         const ev = evaluate(world, { resourceId, date, blockIds: [P(block)], units, now: fakeNow });
         if (!ev.ok) {
+          if (ev.code === "timetabled") continue; // nobody tries to book over the ICT timetable
           await db.query("INSERT INTO booking_attempts (teacher_id, resource_id, date, block_id, code, at) VALUES ($1,$2,$3,$4,$5,$6)", [teacher, resourceId, date, P(block), ev.code, fakeNow.toISOString()]);
           continue;
         }

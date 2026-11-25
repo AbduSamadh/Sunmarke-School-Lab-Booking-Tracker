@@ -2,7 +2,7 @@
  * The demo's world: the same labs, in-charges, timetable and rules as the real app
  * (apps/web/lib/server/seed.ts), kept in the browser. Nothing is sent anywhere.
  */
-import { DEFAULT_SETTINGS, standardTimetable, type InchargeAssignment, type Resource } from "@sunmarke/rules";
+import { DEFAULT_SETTINGS, standardTimetable, type InchargeAssignment, type Resource, type TimetabledLesson } from "@sunmarke/rules";
 
 export type Role = "teacher" | "incharge" | "admin" | "viewer";
 export interface Person { id: string; name: string; role: Role; department: string; email: string }
@@ -18,7 +18,9 @@ export const PEOPLE: Person[] = [
   { id: "abdul", name: "Abdul", role: "incharge", department: "Labs", email: "abdul@sunmarke.example" },
   { id: "nael", name: "Nael", role: "incharge", department: "Labs", email: "nael@sunmarke.example" },
   { id: "abd", name: "Abd", role: "admin", department: "Labs", email: "abd@sunmarke.example" },
-  { id: "sreejit", name: "Dr. Sreejit", role: "viewer", department: "SLT, Principal and BOD", email: "sreejit@sunmarke.example" },
+  { id: "sreejit", name: "Dr. Sreejit", role: "viewer", department: "SLT", email: "sreejit@sunmarke.example" },
+  { id: "principal", name: "Principal", role: "viewer", department: "Principal", email: "principal@sunmarke.example" },
+  { id: "bod", name: "Board of Directors", role: "viewer", department: "BOD", email: "bod@sunmarke.example" },
   { id: "neil", name: "Dr. Neil", role: "viewer", department: "Leadership", email: "neil@sunmarke.example" },
 ];
 
@@ -31,20 +33,32 @@ export const LABS: Lab[] = [
   { id: "strike", name: "Strike Lab", type: "room", units: 1, active: true, colour: "strike", location: "Senior block", capacity: 28 },
 ];
 
-const FIRST: Record<string, [string, string]> = {
-  quantum: ["ram", "abdul"], carts: ["ram", "abdul"], dollarx: ["abdul", "ram"], xreal: ["abdul", "ram"], strike: ["abdul", "ram"],
+/** In-charge order per lab: Nael works Quantum and the AI Carts with Ram, and steps in for the other labs. */
+const ORDER: Record<string, string[]> = {
+  quantum: ["ram", "nael", "abdul"], carts: ["ram", "nael", "abdul"], dollarx: ["abdul", "ram", "nael"], xreal: ["abdul", "ram", "nael"], strike: ["abdul", "ram", "nael"],
 };
-/** Primary, fallback, then Nael as the third in-charge for every lab. */
-export const ASSIGNMENTS: InchargeAssignment[] = LABS.flatMap((l) => [
-  { resourceId: l.id, staffId: FIRST[l.id][0], priority: 1 },
-  { resourceId: l.id, staffId: FIRST[l.id][1], priority: 2 },
-  { resourceId: l.id, staffId: "nael", priority: 3 },
-]);
+export const ASSIGNMENTS: InchargeAssignment[] = LABS.flatMap((l) => ORDER[l.id].map((staffId, i) => ({ resourceId: l.id, staffId, priority: i + 1 })));
+
+/** Sample weekly ICT timetable in the hybrid labs (same as apps/web seed). Weekday 1 = Monday. */
+const ICT_PERIODS: Record<string, Record<number, string[]>> = {
+  strike: { 1: ["P1", "P2", "P5"], 2: ["P1", "P2", "P6"], 3: ["P3", "P4", "P7"], 4: ["P2", "P3", "P6"], 5: ["P1", "P4"] },
+  xreal: { 1: ["P3", "P4", "P7"], 2: ["P3", "P5", "P7"], 3: ["P1", "P5", "P6"], 4: ["P1", "P4", "P7"], 5: ["P2", "P5"] },
+  dollarx: { 1: ["P2", "P6"], 2: ["P2", "P3", "P7"], 3: ["P4", "P5"], 4: ["P3", "P6", "P7"], 5: ["P1", "P3", "P6"] },
+};
+export const LESSONS: TimetabledLesson[] = Object.entries(ICT_PERIODS).flatMap(([resourceId, days], li) =>
+  Object.entries(days).flatMap(([wd, codes]) =>
+    codes.map((blockCode, i) => {
+      const n = li * 7 + Number(wd) * 3 + i;
+      return { id: `ict-${resourceId}-${wd}-${blockCode}`, resourceId, weekday: Number(wd), blockCode, label: `ICT Y${7 + (n % 5)} ${"ABCD"[n % 4]}` };
+    }),
+  ),
+);
 
 export const TIMETABLE = standardTimetable();
 export const SETTINGS = DEFAULT_SETTINGS;
 
-export const SUBJECTS = ["Science", "Physics", "Chemistry", "Biology", "Computing", "Maths", "English", "Design & Technology", "Art", "Music", "Geography", "History", "Arabic", "Islamic Studies", "French", "Business", "PE", "Other"];
+/** Matched to KS3 (same as apps/web seed). */
+export const SUBJECTS = ["Computing", "Science", "Maths", "English", "Design & Technology", "Art & Design", "Music", "Geography", "History", "Languages", "Citizenship", "PE", "Arabic", "Islamic Studies", "Moral, Social & Cultural Studies", "Other"];
 export const YEARS = ["FS1", "FS2", ...Array.from({ length: 13 }, (_, i) => `Y${i + 1}`)];
 export const SECTIONS = ["A", "B", "C", "D", "E", "F"];
 

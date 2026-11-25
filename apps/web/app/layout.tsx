@@ -41,7 +41,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         <a className="skip" href="#main">Skip to content</a>
         <div className="devbar" role="note">
-          Pilot build: sign-in, calendars and email are simulated. Nothing is sent outside this app.
+          Pilot build: sign-in, calendars and Teams messages are simulated. Nothing is sent outside this app.
         </div>
         <header className="topbar">
           <div className="topbar-inner">

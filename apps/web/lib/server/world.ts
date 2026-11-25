@@ -1,5 +1,6 @@
 import type { Db, Tx } from "@sunmarke/db";
 import {
+  type TimetabledLesson,
   DEFAULT_SETTINGS,
   type Blackout,
   type BusyInterval,
@@ -90,6 +91,13 @@ export async function getHolds(db: Q, from: string, to: string): Promise<SlotHol
   return rows.map((r) => ({ bookingId: r.booking_id, resourceId: r.resource_id, inchargeId: r.incharge_id, date: r.date, blockId: r.block_id, units: r.units }));
 }
 
+export async function getLessons(db: Q): Promise<TimetabledLesson[]> {
+  const rows = await db.query<{ id: string; resource_id: string; weekday: number; block_code: string; label: string }>(
+    "SELECT id, resource_id, weekday, block_code, label FROM timetabled_lessons WHERE active ORDER BY weekday, block_code",
+  );
+  return rows.map((r) => ({ id: r.id, resourceId: r.resource_id, weekday: r.weekday, blockCode: r.block_code, label: r.label }));
+}
+
 export async function getBlackouts(db: Q, from: string, to: string): Promise<Blackout[]> {
   const rows = await db.query<{ id: string; resource_id: string | null; date_from: string; date_to: string; block_codes: string[] | null; reason: Blackout["reason"]; note: string; campus_id: string }>(
     "SELECT id, resource_id, date_from, date_to, block_codes, reason, note, campus_id FROM blackouts WHERE active AND date_from <= $2 AND date_to >= $1",
@@ -129,7 +137,7 @@ export interface LoadedWorld extends WorldState {
  */
 export async function loadWorld(db: Db, from: string, to: string, opts: { tx?: Tx; skipCalendar?: boolean; campusId?: string } = {}): Promise<LoadedWorld> {
   const q: Q = opts.tx ?? db;
-  const [settings, timetables, resourceRows, assignments, staffRows, holds, blackouts, offers, absences] = await Promise.all([
+  const [settings, timetables, resourceRows, assignments, staffRows, holds, blackouts, offers, absences, lessons] = await Promise.all([
     getSettings(q),
     getTimetables(q),
     getResources(q),
@@ -139,6 +147,7 @@ export async function loadWorld(db: Db, from: string, to: string, opts: { tx?: T
     getBlackouts(q, from, to),
     getOffers(q, from, to),
     getAbsences(q, from, to),
+    getLessons(q),
   ]);
   const inchargeIds = [...new Set(assignments.map((a) => a.staffId))];
   const incharges = staffRows.filter((s) => inchargeIds.includes(s.id));
@@ -170,6 +179,7 @@ export async function loadWorld(db: Db, from: string, to: string, opts: { tx?: T
     settings,
     offers,
     absences,
+    lessons,
     calendarChecked,
     calendarError,
   };

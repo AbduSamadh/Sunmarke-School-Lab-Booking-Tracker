@@ -6,7 +6,7 @@ For lab admins (Abd) and group admins at Fortes. Everything here is in **Admin**
 1. **Staff**: import the staff list as CSV (name, email, department, role; role is teacher, incharge, admin or viewer). Existing emails are updated, so the import can be repeated.
 2. **Timetables**: check the standard timetable (55-minute blocks) and add special days (exam weeks, Ramadan hours) as timetables with a higher priority for their dates.
 3. **Blackout dates**: holidays, INSET days, events. Booked lessons on a new blackout are flagged and the teachers told in Teams.
-4. **Labs and carts**: names, capacity, carts in the pool, primary, fallback and third in-charge (Nael), lesson resource links per lab, and the campus **Labs Hub** site link.
+4. **Labs and carts**: names, capacity, carts in the pool, in-charge order (first, second, third), the weekly **timetabled lessons** in each lab (ICT in the hybrid labs, one "Mon P1 | ICT Y7 A" per line; sample data until the real ICT timetable is entered), lesson resource links per lab, and the campus **Labs Hub** site link.
 5. **Curriculum**: the levels are a sample until the real KS3 progressive plan is imported. Use **Import CSV** (code, strand, title, year) with **Replace** to swap in the real plan.
 6. **Rules**: lead time (24 h), how far ahead (28 days), cancel cut-off (2 h), cart limits, weekly quotas (off), waitlist hold (2 h), auto no-show (10 min). Rules are shared by every campus.
 7. **QR codes**: print one per lab door.

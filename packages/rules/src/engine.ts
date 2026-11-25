@@ -1,6 +1,7 @@
 import type {
   Block,
   Blackout,
+  TimetabledLesson,
   BookingRequest,
   Evaluation,
   ISODate,
@@ -98,7 +99,15 @@ export function scopeToCampus(state: WorldState, campusId: string | undefined): 
     timetables: state.timetables.filter((t) => !t.campusId || t.campusId === campusId),
     blackouts: state.blackouts.filter((b) => (b.resourceId ? ids.has(b.resourceId) : !b.campusId || b.campusId === campusId)),
     assignments: state.assignments.filter((a) => ids.has(a.resourceId)),
+    lessons: state.lessons?.filter((l) => ids.has(l.resourceId)),
   };
+}
+
+/** The timetabled lesson using this lab in this block on this date, if any. */
+export function lessonFor(lessons: TimetabledLesson[] | undefined, resourceId: string, date: ISODate, blockCode: string): TimetabledLesson | null {
+  if (!lessons?.length) return null;
+  const wd = isoWeekday(date);
+  return lessons.find((l) => l.resourceId === resourceId && l.weekday === wd && l.blockCode === blockCode) ?? null;
 }
 
 function sortedBlocks(t: Timetable): Block[] {
@@ -256,6 +265,8 @@ export function evaluate(world: WorldState, req: BookingRequest): Evaluation {
   for (const b of blocks) {
     const bo = blackoutFor(state.blackouts, resource.id, req.date, b.code);
     if (bo) return blocked("blackout", blackoutLabel(bo));
+    const lesson = lessonFor(state.lessons, resource.id, req.date, b.code);
+    if (lesson) return blocked("timetabled", `Timetabled: ${lesson.label}`);
     const holds = holdsAt(state.holds, resource.id, req.date, b.id, req.ignoreBookingId);
     // R9 + R1.1: a freed slot is held for the first waitlisted teacher until the offer expires.
     const offers = (state.offers ?? []).filter(

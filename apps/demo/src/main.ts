@@ -229,12 +229,13 @@ function aboutView() {
         <li>Book <strong>3 AI Carts</strong> in a period. Ram, Abdul and Nael each go with a cart, so every lab shows "No lab in-charge available" for that period.</li>
         <li>Pick <strong>Other</strong> as the subject and type your own.</li>
         <li>Switch to <strong>Ram</strong> (in-charge) to see Sessions and his Teams messages.</li>
-        <li>Switch to <strong>Dr. Sreejit</strong> (SLT, Principal and BOD) for the reports, including each teacher's use.</li>
+        <li>Switch to <strong>Dr. Sreejit</strong> (SLT), the <strong>Principal</strong> or the <strong>Board of Directors</strong> for the reports, including each teacher's use.</li>
       </ol>
       <h2>The rules</h2>
       <ul>
         <li>Labs: Quantum, DollarX, XReal, Strike, and AI Carts that come to the classroom.</li>
-        <li>Every booking needs a free lab and a free lab in-charge: Ram (Quantum, AI Carts), Abdul (DollarX, XReal, Strike), then the other, then Nael.</li>
+        <li>Every booking needs a free lab and a free lab in-charge: Ram, then Nael, then Abdul for Quantum and the AI Carts; Abdul, then Ram, then Nael for DollarX, XReal and Strike.</li>
+        <li>DollarX, XReal and Strike are hybrid labs with regular ICT lessons, shown as "Timetabled" in the grid. Only the other periods can be booked.</li>
         <li>Each AI Cart goes with its own in-charge, so at most 3 carts at a time; when 3 are out no lab can be booked.</li>
         <li>Book 24 hours to 4 weeks ahead, one period per booking; cancel up to 2 hours before.</li>
         <li>Messages go to Microsoft Teams.</li>

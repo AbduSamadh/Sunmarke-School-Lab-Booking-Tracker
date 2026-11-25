@@ -65,9 +65,9 @@ describe("multi-campus", () => {
 
 describe("curriculum mapping", () => {
   it("tags a booking with plan levels and counts them in the coverage report", async () => {
-    const r = await createBooking(db, sara, { ...base, resourceId: "quantum", date: TUE, blockIds: [P("P3")], curriculumIds: ["cl-pr-8", "cl-ai-8"] });
+    const r = await createBooking(db, sara, { ...base, resourceId: "quantum", date: TUE, blockIds: [P("P3")], curriculumIds: ["cl-pr-8", "cl-sy-8"] });
     if (!r.ok) throw new Error(r.reason);
-    expect(r.booking.curriculumIds).toEqual(["cl-pr-8", "cl-ai-8"]);
+    expect(r.booking.curriculumIds).toEqual(["cl-pr-8", "cl-sy-8"]);
     const rep = await buildReport(db, { from: TUE, to: TUE });
     expect(rep.curriculum.levels.find((l) => l.code === "PR-8")).toMatchObject({ sessions: 1, classes: 1 });
     expect(rep.curriculum.covered).toBe(2);
@@ -80,8 +80,8 @@ describe("curriculum mapping", () => {
   it("teachers can change the tags later", async () => {
     const r = await createBooking(db, sara, { ...base, resourceId: "quantum", date: TUE, blockIds: [P("P3")] });
     if (!r.ok) throw new Error(r.reason);
-    const b = await updateBooking(db, sara, r.booking.id, { curriculumIds: ["cl-dm-8"] });
-    expect(b?.curriculumIds).toEqual(["cl-dm-8"]);
+    const b = await updateBooking(db, sara, r.booking.id, { curriculumIds: ["cl-it-8"] });
+    expect(b?.curriculumIds).toEqual(["cl-it-8"]);
   });
 });
 

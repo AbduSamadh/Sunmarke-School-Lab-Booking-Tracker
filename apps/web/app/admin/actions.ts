@@ -187,6 +187,40 @@ export async function saveLinks(fd: FormData) {
   back("resources");
 }
 
+const DAY_NAMES = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+
+/**
+ * The lab's own weekly timetable (hybrid labs host regular ICT lessons), one "Mon P1 | ICT Y7 A"
+ * per line. Those periods are never bookable. Replaces the lab's whole list.
+ */
+export async function saveLessons(fd: FormData) {
+  const actor = await requireActor(["admin"]);
+  const db = await getDb();
+  const id = String(fd.get("id"));
+  if (!(await inCampus(actor, "resources", [id]))) return err("resources", "That lab belongs to another campus.");
+  const codes = new Set((await db.query<{ code: string }>("SELECT DISTINCT code FROM blocks WHERE bookable")).map((b) => b.code.toUpperCase()));
+  const lines = String(fd.get("lessons") ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length > 70) return err("resources", "Up to 70 timetabled lessons per lab.");
+  const rows: { weekday: number; blockCode: string; label: string }[] = [];
+  for (const [i, l] of lines.entries()) {
+    const m = /^([a-z]{3})[a-z]*\s+(\S+)\s*(?:\|\s*(.*))?$/i.exec(l);
+    const weekday = m ? DAY_NAMES.indexOf(m[1].toLowerCase()) + 1 : 0;
+    const blockCode = m ? m[2].toUpperCase() : "";
+    const label = (m?.[3] ?? "").trim() || "ICT lesson";
+    if (!m || weekday < 1 || !codes.has(blockCode) || label.length > 40)
+      return err("resources", `Timetable line ${i + 1}: write it as "Mon P1 | ICT Y7 A", using a bookable period.`);
+    if (rows.some((r) => r.weekday === weekday && r.blockCode === blockCode)) return err("resources", `Timetable line ${i + 1}: that period is listed twice.`);
+    rows.push({ weekday, blockCode, label });
+  }
+  await db.transaction(async (tx) => {
+    await tx.query("DELETE FROM timetabled_lessons WHERE resource_id = $1", [id]);
+    for (const r of rows)
+      await tx.query("INSERT INTO timetabled_lessons (id, resource_id, weekday, block_code, label) VALUES ($1,$2,$3,$4,$5)", [newId("tl"), id, r.weekday, r.blockCode, r.label]);
+  });
+  await audit(db, { actorId: actor.id, action: "resource.lessons", entity: "resource", entityId: id, after: rows });
+  back("resources");
+}
+
 /** The campus Labs Hub site (lesson ideas, guides). Blank removes the link. */
 export async function saveHubUrl(fd: FormData) {
   const actor = await requireActor(["admin"]);

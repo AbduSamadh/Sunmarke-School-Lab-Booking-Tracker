@@ -4,6 +4,11 @@
 
 abd's changes of 25 Nov.
 
+- Nael works Quantum and the AI Carts with Ram (Ram, then Nael, then Abdul), and steps in for DollarX, XReal and Strike when Abdul and Ram are busy.
+- Leadership sign-ins for the Principal and the Board of Directors, next to Dr. Sreejit (SLT) and Dr. Neil. They see reports and get the weekly report.
+- Hybrid labs: DollarX, XReal and Strike have a weekly ICT timetable (sample data for now). Those periods show as "Timetabled" and cannot be booked. Admins edit it in Admin › Labs and carts › Timetabled lessons.
+- Curriculum levels rewritten to match the KS3 Computing programme of study. Subjects follow the KS3 curriculum (plus Arabic, Islamic Studies and Moral, Social and Cultural Studies): Physics, Chemistry, Biology and Business removed; Art & Design, Languages and Citizenship added.
+
 - AI Carts: up to 3 carts per booking, and each cart comes with its own lab in-charge. Booking 3 carts ties up all three in-charges, so no lab can be booked in that period. The grid shows how many carts can still go out (the lower of carts left and free in-charges).
 - Nael added as the third lab in-charge for every lab and the carts (after the primary and the backup). Admin › Labs and carts has a third in-charge choice.
 - Dr. Sreejit added with leadership access (SLT, Principal and BOD).
