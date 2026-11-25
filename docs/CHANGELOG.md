@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.0.0 (25 Nov 2026)
+
+Release 2 from the plan, minus Teams / Google Chat (waits on Fortes IT) and the Arabic interface (dropped by abd, 25 Nov).
+
+- Phone app for iOS and Android (Expo, `apps/mobile`) on the same API: book from the week grid with the reason and nearby free slots when blocked, My bookings with cancel, Sessions for in-charges with attendance, QR check-in with the camera or a typed code, light and dark. Sign-in tokens live in the phone's secure storage and last 30 days.
+- Push notifications: phones register after sign-in; every booking email also goes out as a notification. Sending is off until the school sets `PUSH_PROVIDER=expo`.
+- Several campuses: each campus has its own labs, staff, timetables and blackout dates. Group admins and leadership switch campus in the top bar and add campuses in Admin › Campuses. Teachers only see and book their own campus.
+- Curriculum mapping: teachers tag a booking with up to 5 KS3 levels; Reports shows how often each level was taught, which are not covered yet, and exports it to CSV. Admin › Curriculum edits the levels and imports the real plan from CSV (the 12 levels in place are samples).
+- Labs Hub: admins set the campus Labs Hub site; it is linked at the foot of every page and in confirmation emails, next to the per-lab lesson links.
+- API description: OpenAPI 3.1 at `/api/v1/openapi.json` and in `docs/api/openapi.json`, built from the server's own input schemas. See docs/API.md.
+- Tests: Playwright journeys for each role, axe WCAG 2.2 AA on every screen in light and dark, an access-control check on every API route for every role, a load test (60 users, plus 30 people racing for one slot: exactly one wins), and a GitHub Actions workflow running all of it on every pull request.
+- Guides: teacher, in-charge and admin runbook in `docs/guides`, with screenshots.
+- Server: 15 new tests (44 total); phone app: 5 tests.
+
 ## 1.2.0 (25 Nov 2026)
 
 - Dark mode switch in the top bar, with an animated sun-to-moon knob and a circular reveal. It follows the device until you choose, and remembers your choice.

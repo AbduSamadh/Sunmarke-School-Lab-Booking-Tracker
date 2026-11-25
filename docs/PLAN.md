@@ -209,6 +209,9 @@ Items marked PM are additions beyond the original brief.
 
 ### Release 2 (mobile and scale)
 
+Status 25 Nov 2026: built except Teams / Google Chat (needs Fortes IT). The
+Arabic UI was dropped by abd. See docs/specs/release-2.md.
+
 - Native iOS/Android app (Expo, same API) with push notifications
 
 - Microsoft Teams / Google Chat notifications

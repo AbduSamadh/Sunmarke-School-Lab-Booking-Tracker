@@ -50,6 +50,17 @@ Everything in Release 1.1 that does not need Fortes IT is built. Assumptions mad
 - **Assistant:** built in by default. It understands plain requests with a parser, checks everything with packages/rules, and only ever prepares cards; the person presses the button and the normal API does the write. Teachers cannot choose the in-charge (R-rules assign primary then backup), so the assistant explains who it will be; admins can reassign.
 - **Claude AI mode (open, waiting on abd):** set `ASSISTANT_PROVIDER=claude` and `ANTHROPIC_API_KEY` (optional `ASSISTANT_MODEL`) to let Claude understand requests. Claude can only call the same read-only functions; changes still need the person's press. Sent to Anthropic: the person's messages, first name and role, lab and in-charge names, free slots and their own bookings. Falls back to the built-in assistant on any error. Needs a school-approved API key and a data-protection check before switching on.
 
+## Release 2: phone app, campuses, curriculum (built 25 Nov 2026)
+
+- **Arabic interface: dropped** at abd's request (25 Nov). The layout does not depend on text direction, so it can be added later.
+- **Campuses:** labs, staff, timetables and blackout dates belong to a campus. The booking rules (lead time, cut-off, quotas) are shared by every campus for now; per-campus rules would be a settings change, not a rules change. Teachers can only book their home campus. Group admins (`all_campuses`, currently abd and Dr. Neil) switch campus; a new campus starts with a copy of the standard timetable.
+- **Curriculum levels are samples** (12 levels, CT, PR, AI and DM strands for Y7 to Y9) until the school's KS3 progressive plan is imported in Admin › Curriculum.
+- **Push notifications are off** until the school approves a provider. With `PUSH_PROVIDER=expo` they go through Expo's push service (exp.host), which sees the device token, the title and a one-line message. Until then they are only logged.
+- **Phone app is not published.** App Store and Play Store publishing needs school-owned developer accounts and real sign-in (SSO) first; the email-only pilot sign-in must not ship in a store build.
+- **Phone sign-in:** the app gets a signed 30-day token (`Authorization: Bearer`), kept in the Keychain / Keystore. Website session cookies now expire after 14 days.
+- **Labs Hub:** one link per campus (Admin › Labs and carts), plus the per-lab lesson links from Release 1.1. The real Labs Hub URL still needs entering.
+- **Load:** on the embedded database, 60 simultaneous users gave p95 about 0.6 s with no errors, and 30 simultaneous requests for one slot gave exactly one booking. The occasional slow request (p99 about 4 s) comes from the single-process embedded database and should go once the app runs on hosted Postgres.
+
 ## Waiting on Fortes IT
 
 - Real sign-in (Google Workspace and Microsoft 365 SSO), replacing the placeholder email sign-in. **Do not deploy publicly before this.**
