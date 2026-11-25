@@ -234,26 +234,24 @@ button.cell-free:hover::before { transform: scaleY(1); }
    floats gently, and has rings pulsing out from behind it. */
 .lp-mark { position: absolute; inset: 19%; display: block; border-radius: 50%; animation: mark-float 6s 2.4s ease-in-out infinite; filter: drop-shadow(0 24px 30px rgba(16, 32, 64, .30)); }
 .lp-mark img { width: 100%; height: 100%; display: block; }
-/* Logo build: layers are exact cut-outs of the logo; every animation ends at
-   transform none / no clip / full opacity, so the final frame is the logo. */
+/* Logo build: ribbons drawn along paths traced from the logo, then the exact
+   logo image settles on top, so the final frame is the logo itself. */
 .lb, .lb-stack { position: absolute; inset: 0; display: block; cursor: pointer; }
-.lb-l { position: absolute; inset: 0; width: 100%; height: 100%; user-select: none; }
-.lb-ring { animation: lb-ring 1100ms var(--spring) both; }
-.lb-ink, .lb-base { animation: lb-ink 700ms 150ms var(--ease-out) both; }
-.lb-base { inset: 6%; width: auto; height: auto; border-radius: 50%; background: var(--brand-ink); }
-.lb-green { animation: lb-down 650ms 550ms var(--ease-out) both; }
-.lb-orange { animation: lb-down 650ms 700ms var(--ease-out) both; }
-.lb-cyan { animation: lb-down 650ms 850ms var(--ease-out) both; }
-.lb-purple { animation: lb-right 650ms 1000ms var(--ease-out) both; }
-.lb-pink { animation: lb-left 650ms 1150ms var(--ease-out) both; }
-.lb-yellow { animation: lb-yellow 800ms 1350ms var(--spring) both; }
-@keyframes lb-ring { from { opacity: 0; transform: scale(.55) rotate(-160deg); } }
-@keyframes lb-ink { from { clip-path: circle(0% at 50% 50%); } to { clip-path: circle(71% at 50% 50%); } }
-@keyframes lb-down { from { clip-path: inset(0 0 100% 0); transform: translateY(-14px); } to { clip-path: inset(0 0 0 0); transform: none; } }
-@keyframes lb-right { from { clip-path: inset(0 100% 0 0); transform: translateX(-14px); } to { clip-path: inset(0 0 0 0); transform: none; } }
-@keyframes lb-left { from { clip-path: inset(0 0 0 100%); transform: translateX(14px); } to { clip-path: inset(0 0 0 0); transform: none; } }
-@keyframes lb-yellow { 0% { clip-path: inset(0 100% 0 0); transform: translateY(-18px) scaleY(1.25); } 60% { clip-path: inset(0 0 0 0); } 100% { clip-path: inset(0 0 0 0); transform: none; } }
-@media (prefers-reduced-motion: reduce) { .lb-l { animation: none !important; clip-path: none !important; transform: none !important; opacity: 1 !important; } }
+.lb-svg, .lb-logo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; }
+.lb-svg { animation: lb-svg-out 300ms 2700ms linear both; }
+.lb-disc { transform-origin: 264px 264px; animation: lb-disc 600ms 100ms var(--spring) both; }
+.lb-ringline { transform-origin: 264px 264px; transform: rotate(-90deg); stroke-dasharray: 1; stroke-dashoffset: 1; animation: lb-draw 900ms var(--ease-out) forwards; }
+.lb-spin { transform-origin: 264px 264px; animation: lb-spin 2400ms 300ms var(--ease-out) both; }
+.lb-rib { stroke-dasharray: 1; stroke-dashoffset: 1; animation: lb-draw 900ms var(--ease-out) forwards; }
+.lb-rib-0 { animation-delay: 450ms; } .lb-rib-1 { animation-delay: 600ms; } .lb-rib-2 { animation-delay: 750ms; }
+.lb-rib-3 { animation-delay: 900ms; } .lb-rib-4 { animation-delay: 1050ms; } .lb-rib-5 { animation-delay: 1250ms; }
+.lb-logo { opacity: 0; animation: lb-logo 600ms 2200ms var(--ease-out) forwards; }
+@keyframes lb-draw { to { stroke-dashoffset: 0; } }
+@keyframes lb-disc { from { transform: scale(0); } }
+@keyframes lb-spin { from { transform: rotate(-120deg); } to { transform: rotate(0deg); } }
+@keyframes lb-logo { to { opacity: 1; } }
+@keyframes lb-svg-out { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .lb-svg { display: none; } .lb-logo { animation: none; opacity: 1; } }
 @keyframes mark-in { from { opacity: 0; transform: scale(.7); } }
 @keyframes mark-float { 50% { transform: translateY(-10px); } }
 .lp-ring { position: absolute; inset: 19%; border-radius: 50%; border: 2px solid var(--brand-navy); opacity: 0; animation: ring-out 4.5s 2.2s ease-out infinite; }
