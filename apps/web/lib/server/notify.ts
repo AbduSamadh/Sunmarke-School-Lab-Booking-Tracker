@@ -4,6 +4,7 @@ import type { BookingDetail } from "./bookings";
 import { fmtDateLong } from "../shared/format";
 import { DEFAULT_SETTINGS, localDate } from "@sunmarke/rules";
 import { now } from "./util";
+import { sendPush } from "./push";
 
 export type EmailTemplate = "confirmed" | "changed" | "cancelled" | "declined" | "reminder" | "waitlist_offer" | "feedback" | "no_cover";
 
@@ -117,6 +118,11 @@ export async function sendBookingEmail(db: Db, template: EmailTemplate, b: Booki
   const list = template === "waitlist_offer" && extra.to ? [extra.to] : recipients;
   for (const addr of [...new Set(list)]) {
     await sender.send({ bookingId: b.id, template, to: addr, subject, html, text, ics });
+    // Release 2: the same news as a phone notification, for anyone signed in to the app.
+    // A failed push never fails (and so never repeats) the email.
+    await sendPush(db, { to: addr, kind: template, title: subject, body: paragraphs[0] ?? heading, bookingId: b.id, url: template === "waitlist_offer" ? `/?date=${b.date}` : "/bookings" }).catch((e) =>
+      console.error("push failed", e instanceof Error ? e.message : e),
+    );
   }
 }
 

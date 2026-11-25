@@ -95,3 +95,19 @@ describe("session tokens", () => {
     expect(readToken(old)).toBeNull();
   });
 });
+
+describe("phone app push", () => {
+  it("registered devices get a push alongside the email; none without a device", async () => {
+    const { cancelBooking } = await import("../lib/server/bookings");
+    const r = await createBooking(db, sara, { ...base, resourceId: "quantum", date: TUE, blockIds: [P("P3")] });
+    if (!r.ok) throw new Error(r.reason);
+    const { runJobs } = await import("../lib/server/jobs");
+    await runJobs(db);
+    expect((await db.query("SELECT 1 FROM notifications WHERE template LIKE 'push.%'")).length).toBe(0);
+    await db.query("INSERT INTO push_devices (token, staff_id, platform) VALUES ('ExponentPushToken[abc123xyz]', 't-sara', 'ios')");
+    await cancelBooking(db, sara, r.booking.id);
+    await runJobs(db);
+    const push = await db.query<{ template: string; recipient: string }>("SELECT template, recipient FROM notifications WHERE template LIKE 'push.%'");
+    expect(push).toEqual([{ template: "push.cancelled", recipient: "sara.khan@sunmarke.example" }]);
+  });
+});

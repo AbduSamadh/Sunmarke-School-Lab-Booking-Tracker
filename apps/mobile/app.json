@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Sunmarke Lab Booking",
+    "slug": "sunmarke-lab-booking",
+    "scheme": "sunmarkelabs",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#f7f4ee",
+    "ios": {
+      "bundleIdentifier": "school.sunmarke.labbooking",
+      "supportsTablet": true,
+      "infoPlist": { "NSCameraUsageDescription": "Scan the QR code by the lab door to check your class in." }
+    },
+    "android": {
+      "package": "school.sunmarke.labbooking",
+      "adaptiveIcon": { "foregroundImage": "./assets/icon.png", "backgroundColor": "#22397f" },
+      "permissions": ["CAMERA"]
+    },
+    "plugins": [
+      ["expo-notifications", { "color": "#22397f" }],
+      ["expo-camera", { "cameraPermission": "Scan the QR code by the lab door to check your class in." }],
+      "expo-secure-store"
+    ],
+    "extra": {
+      "apiUrl": "http://localhost:3000"
+    }
+  }
+}
