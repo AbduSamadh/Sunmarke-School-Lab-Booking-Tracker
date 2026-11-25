@@ -418,6 +418,7 @@ export function BookingSheet(props: {
         {step.s === "done" && (
           <>
             <div className="sheet-body" aria-live="polite">
+              <svg className="tick" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="22" /><path d="M16 27l7 7 14-15" /></svg>
               <div className="notice notice-ok">Confirmed. A confirmation email with a calendar invite is on its way.</div>
               <div className="summary">
                 <dl>

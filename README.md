@@ -63,6 +63,7 @@ All JSON, session cookie auth, validated with zod (`apps/web/lib/shared/schemas.
 - `GET|POST /api/v1/issues`, `POST /api/v1/issues/:id/resolve`
 - `POST /api/v1/checkin`
 - `POST /api/v1/cron?tasks=jobs,reminders,conflicts,offers,noshow,feedback,digest,weekly` (bearer `CRON_SECRET` or admin). Every 15 min: the default set. 07:00: `digest`. Sunday 18:00: `weekly`.
+- `POST /api/v1/assistant` (message, draft, history; returns cards, never writes)
 - `GET /api/v1/reports/export?table=bookings|utilisation|load|department`
 
 ## Environment
@@ -74,5 +75,8 @@ All JSON, session cookie auth, validated with zod (`apps/web/lib/shared/schemas.
 | `CRON_SECRET` | unset | Lets a scheduler call `/api/v1/cron` |
 | `APP_URL` | `http://localhost:3000` | Links in emails |
 | `FAKE_NOW` | unset | Pins the clock (ISO time) for demos and tests |
+| `ASSISTANT_PROVIDER` | built-in | `claude` turns on Claude AI mode for the assistant |
+| `ANTHROPIC_API_KEY` | unset | Needed only for Claude AI mode. Never commit it. |
+| `ASSISTANT_MODEL` | `claude-opus-5-5` | Model for Claude AI mode |
 
 Do not deploy this build publicly: sign-in is a placeholder until school SSO is connected.

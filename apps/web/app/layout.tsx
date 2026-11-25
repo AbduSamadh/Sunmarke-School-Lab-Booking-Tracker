@@ -8,6 +8,10 @@ import "./globals.css";
 import { currentActor } from "@/lib/server/auth";
 import { Nav } from "@/components/Nav";
 import { RegisterSW } from "@/components/RegisterSW";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { Motion } from "@/components/Motion";
+import { Assistant } from "@/components/Assistant";
+import { cookies } from "next/headers";
 
 export const metadata: Metadata = {
   title: "Sunmarke Lab Booking",
@@ -19,8 +23,10 @@ export const dynamic = "force-dynamic";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const actor = await currentActor();
+  const pref = (await cookies()).get("slb_theme")?.value;
+  const theme = pref === "dark" || pref === "light" ? pref : null;
   return (
-    <html lang="en-GB">
+    <html lang="en-GB" data-theme={theme ?? undefined} suppressHydrationWarning>
       <body>
         <a className="skip" href="#main">Skip to content</a>
         <div className="devbar" role="note">
@@ -33,6 +39,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <span>Sunmarke Labs</span>
             </a>
             {actor && <Nav role={actor.role} />}
+            {!actor && <div style={{ flex: 1 }} />}
+            <ThemeToggle initial={theme} />
             {actor && (
               <div className="who">
                 <span className="who-name">{actor.name}</span>
@@ -46,6 +54,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </header>
         <main id="main" className="main">{children}</main>
         <RegisterSW />
+        <Motion />
+        {actor && <Assistant firstName={actor.name.split(" ")[0]} role={actor.role} />}
       </body>
     </html>
   );

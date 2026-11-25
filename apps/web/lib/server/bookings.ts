@@ -329,7 +329,7 @@ export async function expireOffers(db: Db) {
   return lapsed.length;
 }
 
-async function quotaUsage(db: Db, teacherId: string, date: string) {
+export async function quotaUsage(db: Db, teacherId: string, date: string) {
   const { from, to } = weekRange(date);
   const r = await db.query<{ teacher: number; dept: number }>(
     `SELECT

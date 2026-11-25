@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0 (25 Nov 2026)
+
+- Dark mode switch in the top bar, with an animated sun-to-moon knob and a circular reveal. It follows the device until you choose, and remembers your choice.
+- Livelier screens: hover lift and pointer glow on panels and grid cells, click ripples, gentle entrance animations, an animated tick on a confirmed booking. All motion is off when the device asks for reduced motion.
+- Booking assistant (bottom-right button on every signed-in screen): ask how booking works, what is free ("free labs Thursday P3"), book ("book Quantum tomorrow P4-P5 for Y8 B science"), cancel, join a waitlist, or check the rules. It only proposes; you press Confirm, and every booking goes through the same rules and API as the grid. Admins can book for a teacher and pick the in-charge.
+- Optional Claude AI mode for the assistant, off by default (see DECISIONS.md).
+- Server: 8 new assistant tests (29 total).
+
 ## 1.1.0 (25 Nov 2026)
 
 Release 1.1 from the plan, minus anything that needs Fortes IT (see DECISIONS.md).
