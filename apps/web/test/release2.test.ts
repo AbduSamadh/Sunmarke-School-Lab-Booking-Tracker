@@ -111,3 +111,19 @@ describe("phone app push", () => {
     expect(push).toEqual([{ template: "push.cancelled", recipient: "sara.khan@sunmarke.example" }]);
   });
 });
+
+describe("Labs Hub link", () => {
+  it("is added to the confirmation email for the lab's campus", async () => {
+    await db.query("UPDATE campuses SET hub_url = 'https://sites.google.com/sunmarke.example/labs-hub' WHERE id = 'sunmarke'");
+    const r = await createBooking(db, sara, { ...base, resourceId: "quantum", date: TUE, blockIds: [P("P3")] });
+    if (!r.ok) throw new Error("booking failed");
+    const mail = await db.query<{ body_text: string }>("SELECT body_text FROM notifications WHERE template = 'confirmed' AND booking_id = $1", [r.booking.id]);
+    expect(mail[0].body_text).toContain("https://sites.google.com/sunmarke.example/labs-hub");
+  });
+  it("is left out when not set", async () => {
+    const r = await createBooking(db, tariq, { ...base, resourceId: "north-lab", date: TUE, blockIds: ["tt-north-P1"] });
+    if (!r.ok) throw new Error("booking failed");
+    const mail = await db.query<{ body_text: string }>("SELECT body_text FROM notifications WHERE template = 'confirmed' AND booking_id = $1", [r.booking.id]);
+    expect(mail[0].body_text).not.toContain("Labs Hub");
+  });
+});

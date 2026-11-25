@@ -12,7 +12,7 @@ import { now } from "@/lib/server/util";
 import { fmtDateShort } from "@/lib/shared/format";
 import { StaffImport } from "@/components/StaffImport";
 import { blockTime, removeBlackout } from "../incharge/actions";
-import { addCampus, addLevel, addResource, importLevels, saveLevel, addTimetable, reassign, retireTimetable, saveCampus, saveLinks, saveResource, saveRules, setStaffActive, setStaffCampus, toggleCalendarOutage } from "./actions";
+import { addCampus, addLevel, addResource, importLevels, saveLevel, addTimetable, reassign, retireTimetable, saveCampus, saveHubUrl, saveLinks, saveResource, saveRules, setStaffActive, setStaffCampus, toggleCalendarOutage } from "./actions";
 
 const TABS = [
   ["resources", "Labs and carts"],
@@ -45,7 +45,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     getStaff(db),
     getAssignments(db),
     getTimetables(db),
-    db.query<{ id: string; name: string; short_name: string; active: boolean }>("SELECT id, name, short_name, active FROM campuses ORDER BY sort, name"),
+    db.query<{ id: string; name: string; short_name: string; active: boolean; hub_url: string }>("SELECT id, name, short_name, active, hub_url FROM campuses ORDER BY sort, name"),
   ]);
   const resources = allResources.filter((r) => r.campusId === campus);
   const staff = actor.allCampuses ? allStaff : allStaff.filter((s) => s.campusId === campus);
@@ -111,6 +111,14 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           </div>
           <section className="panel">
             <h2>Lesson resources</h2>
+            <form action={saveHubUrl} className="row2" style={{ alignItems: "end", marginBottom: 16 }}>
+              <div className="field">
+                <label htmlFor="hub-url">Labs Hub site</label>
+                <input id="hub-url" name="hubUrl" type="url" inputMode="url" placeholder="https://sites.google.com/..." defaultValue={campuses.find((c) => c.id === campus)?.hub_url ?? ""} aria-describedby="hub-hint" />
+                <div className="hint" id="hub-hint">Shown at the foot of every page and in confirmation emails. Leave blank to hide it.</div>
+              </div>
+              <div><button className="btn btn-sm" type="submit">Save Labs Hub link</button></div>
+            </form>
             <p className="small muted">Links teachers see when they book and in the confirmation email: safety rules, lesson ideas, how-to guides. One per line, as &ldquo;Label | https://&hellip;&rdquo;.</p>
             <div className="cols">
               {resources.map((r) => (

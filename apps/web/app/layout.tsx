@@ -32,6 +32,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const campuses = actor?.allCampuses
     ? await (await getDb()).query<{ id: string; name: string; short_name: string }>("SELECT id, name, short_name FROM campuses WHERE active ORDER BY sort, name")
     : [];
+  // The Labs Hub site for this person's campus, if the admin has set one.
+  const hubUrl = actor
+    ? ((await (await getDb()).query<{ hub_url: string }>("SELECT hub_url FROM campuses WHERE id = $1", [actor.campusId ?? "sunmarke"]))[0]?.hub_url ?? "")
+    : "";
   return (
     <html lang="en-GB" data-theme={theme ?? undefined} suppressHydrationWarning>
       <body>
@@ -78,6 +82,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Logo name="sunmarke" alt="Sunmarke School" height={36} />
             <span className="small muted">Sunmarke School Lab Booking · part of</span>
             <Logo name="fortes" alt="Fortes Education" height={44} />
+            {hubUrl && (
+              <a className="small" href={hubUrl} target="_blank" rel="noopener noreferrer">
+                Labs Hub: lesson ideas and guides<span className="sr-only"> (opens in a new tab)</span>
+              </a>
+            )}
           </div>
         </footer>
         <RegisterSW />

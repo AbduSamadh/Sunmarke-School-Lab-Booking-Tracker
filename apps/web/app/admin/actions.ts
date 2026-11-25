@@ -184,6 +184,20 @@ export async function saveLinks(fd: FormData) {
   back("resources");
 }
 
+/** The campus Labs Hub site (lesson ideas, guides). Blank removes the link. */
+export async function saveHubUrl(fd: FormData) {
+  const actor = await requireActor(["admin"]);
+  const raw = String(fd.get("hubUrl") ?? "").trim();
+  const p = z.union([z.literal(""), z.string().max(500).url().refine((u) => /^https:\/\//i.test(u), "The Labs Hub link must start with https://")]).safeParse(raw);
+  if (!p.success) return err("resources", p.error.issues[0].message);
+  const db = await getDb();
+  const campus = campusOf(actor);
+  const before = await db.query<{ hub_url: string }>("SELECT hub_url FROM campuses WHERE id = $1", [campus]);
+  await db.query("UPDATE campuses SET hub_url = $2 WHERE id = $1", [campus, p.data]);
+  await audit(db, { actorId: actor.id, action: "campus.hub_url", entity: "campus", entityId: campus, before: before[0], after: { hub_url: p.data } });
+  back("resources");
+}
+
 /** Move a booking to another in-charge (or whoever is free). The teacher and both in-charges are emailed. */
 export async function reassign(fd: FormData) {
   const actor = await requireActor(["admin"]);

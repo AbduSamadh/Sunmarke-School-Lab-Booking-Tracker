@@ -286,6 +286,8 @@ ALTER TABLE timetables ADD COLUMN IF NOT EXISTS campus_id text NOT NULL DEFAULT 
 ALTER TABLE blackouts ADD COLUMN IF NOT EXISTS campus_id text NOT NULL DEFAULT 'sunmarke' REFERENCES campuses(id);
 -- Group admins (Fortes) see and manage every campus; everyone else sees their own.
 ALTER TABLE staff ADD COLUMN IF NOT EXISTS all_campuses boolean NOT NULL DEFAULT false;
+-- The campus Labs Hub (Google Site): linked in the footer and in confirmation emails.
+ALTER TABLE campuses ADD COLUMN IF NOT EXISTS hub_url text NOT NULL DEFAULT '';
 
 -- Curriculum mapping: the KS3 progressive plan, as admin-editable levels.
 CREATE TABLE IF NOT EXISTS curriculum_levels (
