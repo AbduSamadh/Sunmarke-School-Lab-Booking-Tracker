@@ -1,6 +1,8 @@
 import type { Db } from "@sunmarke/db";
 import { addDays, findConflicts, localDate, timetableForDate } from "@sunmarke/rules";
-import { getBookingDetail, listBookings } from "./bookings";
+import { expireOffers, getBookingDetail, listBookings } from "./bookings";
+import { markNoShows, sendFeedbackRequests } from "./release11";
+import { buildReport } from "./reports";
 import { enqueue, runJobs } from "./jobs";
 import { getEmailSender, renderEmail } from "./email";
 import { sendAdminAlert } from "./notify";
@@ -99,8 +101,40 @@ export async function currentConflicts(db: Db) {
   return { conflicts: findConflicts(world), world };
 }
 
-export async function runCron(db: Db, tasks: string[] = ["jobs", "reminders", "conflicts"]) {
+/** Sunday evening: last week's lab use to admin and leadership. Idempotent per week. */
+export async function sendWeeklyReport(db: Db) {
+  const settings = await getSettings(db);
+  const today = localDate(now(), settings);
+  const to = addDays(today, -1);
+  const from = addDays(today, -7);
+  const subject = `Lab use, ${fmtDateLong(from)} to ${fmtDateLong(to)}`;
+  const already = await db.query("SELECT 1 FROM notifications WHERE template = 'weekly' AND subject = $1", [subject]);
+  if (already.length) return 0;
+  const rep = await buildReport(db, { from, to });
+  const pct = (x: number) => `${Math.round(x * 100)}%`;
+  const rows: [string, string][] = [
+    ["Sessions", String(rep.kpis.sessions)],
+    ["Lab utilisation", pct(rep.kpis.roomUtilisation)],
+    ["Cart utilisation", pct(rep.kpis.cartUtilisation)],
+    ["Requests turned away", `${rep.kpis.turnedAway} (no in-charge free: ${rep.turnedAway.noIncharge})`],
+    ["Teachers booking", String(rep.kpis.teachers)],
+    ["No-show rate", pct(rep.kpis.noShowRate)],
+    ...(rep.feedback.count ? ([["Session rating", `${rep.feedback.avg.toFixed(1)} / 5 from ${rep.feedback.count} ratings`]] as [string, string][]) : []),
+    ...rep.utilisation.map((u) => [u.name, `${u.sessions} sessions, ${pct(u.pct)}`] as [string, string]),
+  ];
+  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+  const { html, text } = renderEmail({ heading: subject, rows, action: { label: "Open the full report", url: `${appUrl}/reports?from=${from}&to=${to}` } });
+  const recipients = await db.query<{ email: string }>("SELECT email FROM staff WHERE active AND role IN ('admin','viewer')");
+  for (const r of recipients) await getEmailSender(db).send({ template: "weekly", to: r.email, subject, html, text });
+  return recipients.length;
+}
+
+export async function runCron(db: Db, tasks: string[] = ["jobs", "reminders", "conflicts", "offers", "noshow", "feedback"]) {
   const out: Record<string, unknown> = {};
+  if (tasks.includes("offers")) out.offers = await expireOffers(db);
+  if (tasks.includes("noshow")) out.noShows = await markNoShows(db);
+  if (tasks.includes("feedback")) out.feedback = await sendFeedbackRequests(db);
+  if (tasks.includes("weekly")) out.weekly = await sendWeeklyReport(db);
   if (tasks.includes("jobs")) out.jobs = await runJobs(db);
   if (tasks.includes("reminders")) out.reminders = await sendReminders(db);
   if (tasks.includes("digest")) out.digest = await sendDailyDigest(db);

@@ -51,6 +51,10 @@ export function overlaps(a: { start: Date; end: Date }, b: { start: Date; end: D
   return a.start.getTime() < b.end.getTime() && b.start.getTime() < a.end.getTime();
 }
 
+export function hhmm(d: Date, settings: RuleSettings): string {
+  return new Date(d.getTime() + settings.utcOffsetMinutes * 60_000).toISOString().slice(11, 16);
+}
+
 export function mondayOf(date: ISODate): ISODate {
   return addDays(date, 1 - isoWeekday(date));
 }
@@ -110,8 +114,17 @@ export function blackoutLabel(b: Blackout): string {
 // ---------------------------------------------------------------------------
 
 export interface BusyReason {
-  kind: "booking" | "calendar";
+  kind: "booking" | "calendar" | "leave";
   text: string;
+}
+
+/** In-charge leave covering this block, if any. */
+export function absenceFor(state: WorldState, staffId: string, date: ISODate, blockCode: string) {
+  return (
+    (state.absences ?? []).find(
+      (a) => a.staffId === staffId && a.dateFrom <= date && a.dateTo >= date && (a.blockCodes === null || a.blockCodes.includes(blockCode)),
+    ) ?? null
+  );
 }
 
 export function inchargeBusy(
@@ -121,6 +134,7 @@ export function inchargeBusy(
   block: Block,
   ignoreBookingId?: string,
 ): BusyReason | null {
+  if (absenceFor(state, staffId, date, block.code)) return { kind: "leave", text: "on leave" };
   const hold = state.holds.find(
     (h) => h.inchargeId === staffId && h.date === date && h.blockId === block.id && h.bookingId !== ignoreBookingId,
   );
@@ -188,9 +202,23 @@ export function evaluate(state: WorldState, req: BookingRequest): Evaluation {
       return blocked("window_too_soon", `Bookings close ${s.minLeadHours} h before the lesson.`, {
         suggestion: "Ask the lab admin if this is urgent.",
       });
-    const lastDay = addDays(localDate(req.now, s), s.maxLeadDays);
+    const maxDays = req.recurring ? s.recurringMaxDays : s.maxLeadDays;
+    const lastDay = addDays(localDate(req.now, s), maxDays);
     if (req.date > lastDay)
-      return blocked("window_too_far", `You can book up to ${Math.round(s.maxLeadDays / 7)} weeks ahead.`);
+      return blocked("window_too_far", `You can book up to ${Math.round(maxDays / 7)} weeks ahead${req.recurring ? " in a series" : ""}.`);
+  }
+
+  // Fair-use quota (R1.1), counted in blocks per school week
+  if (req.usage) {
+    const n = blocks.length;
+    if (s.quotaPerTeacherWeek > 0 && req.usage.teacherWeek + n > s.quotaPerTeacherWeek)
+      return blocked("quota_reached", `You have used your ${s.quotaPerTeacherWeek} lab blocks for this week.`, {
+        suggestion: "Try another week, or ask the lab admin.",
+      });
+    if (s.quotaPerDeptWeek > 0 && req.usage.deptWeek + n > s.quotaPerDeptWeek)
+      return blocked("quota_reached", `Your department has used its ${s.quotaPerDeptWeek} lab blocks for this week.`, {
+        suggestion: "Try another week, or ask the lab admin.",
+      });
   }
 
   // R1 resource free, every block
@@ -203,14 +231,20 @@ export function evaluate(state: WorldState, req: BookingRequest): Evaluation {
     const bo = blackoutFor(state.blackouts, resource.id, req.date, b.code);
     if (bo) return blocked("blackout", blackoutLabel(bo));
     const holds = holdsAt(state.holds, resource.id, req.date, b.id, req.ignoreBookingId);
+    // R9 + R1.1: a freed slot is held for the first waitlisted teacher until the offer expires.
+    const offers = (state.offers ?? []).filter(
+      (o) => o.resourceId === resource.id && o.date === req.date && o.blockId === b.id && o.teacherId !== req.teacherId && o.expiresAt.getTime() > req.now.getTime(),
+    );
     if (resource.type === "room") {
       if (holds.length > 0)
         return blocked("resource_booked", `${resource.name} is already booked at ${b.code}.`, {
           heldBy: holds[0].bookingId,
           canWaitlist: true,
         });
+      if (offers.length > 0)
+        return blocked("held_for_waitlist", `Held for a teacher on the waitlist until ${hhmm(offers[0].expiresAt, s)}.`, { canWaitlist: true });
     } else {
-      const used = holds.reduce((n, h) => n + h.units, 0);
+      const used = holds.reduce((n, h) => n + h.units, 0) + offers.reduce((n, o) => n + o.units, 0);
       const left = resource.units - used;
       if (units > left)
         return blocked(
@@ -259,9 +293,9 @@ export type CellStatus =
   | { state: "booked"; bookingIds: string[]; reason: string }
   | { state: "unavailable"; code: Blocked["code"]; reason: string; suggestion?: string; canWaitlist: boolean; bookingIds: string[] };
 
-export function cellStatus(state: WorldState, resource: Resource, date: ISODate, block: Block, now: Date, overrideWindow = false): CellStatus {
+export function cellStatus(state: WorldState, resource: Resource, date: ISODate, block: Block, now: Date, overrideWindow = false, teacherId?: string): CellStatus {
   if (!block.bookable) return { state: "closed", label: block.code };
-  const ev = evaluate(state, { resourceId: resource.id, date, blockIds: [block.id], units: 1, now, overrideWindow });
+  const ev = evaluate(state, { resourceId: resource.id, date, blockIds: [block.id], units: 1, now, overrideWindow, teacherId });
   const bookingIds = holdsAt(state.holds, resource.id, date, block.id).map((h) => h.bookingId);
   if (ev.ok) {
     const used = holdsAt(state.holds, resource.id, date, block.id).reduce((n, h) => n + h.units, 0);
@@ -357,4 +391,52 @@ export function findConflicts(state: WorldState): Conflict[] {
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Cover (R1.1 leave and cover, admin reassign)
+// ---------------------------------------------------------------------------
+
+/** Can this person cover every block of a booking? Returns the first reason they cannot. */
+export function canCover(state: WorldState, staffId: string, date: ISODate, blockIds: string[], ignoreBookingId?: string): BusyReason | null {
+  const t = timetableForDate(state.timetables, date);
+  for (const id of blockIds) {
+    const b = t?.blocks.find((x) => x.id === id);
+    if (!b) return { kind: "booking", text: "block not on timetable" };
+    const r = inchargeBusy(state, staffId, date, b, ignoreBookingId);
+    if (r) return r;
+  }
+  return null;
+}
+
+/**
+ * Who could take over an existing booking: the resource's in-charges in priority
+ * order, skipping the current one. Null when nobody is free for every block.
+ */
+export function findCover(
+  state: WorldState,
+  booking: { id: string; resourceId: string; date: ISODate; blockIds: string[]; inchargeId: string },
+): { staffId: string; name: string } | null {
+  for (const c of candidatesFor(state, booking.resourceId)) {
+    if (c.staffId === booking.inchargeId) continue;
+    if (!canCover(state, c.staffId, booking.date, booking.blockIds, booking.id)) return { staffId: c.staffId, name: staffName(state, c.staffId) };
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Recurring bookings (R1.1)
+// ---------------------------------------------------------------------------
+
+/** Dates from start to end (inclusive) every `everyWeeks` weeks, on start's weekday. */
+export function recurringDates(start: ISODate, end: ISODate, everyWeeks = 1, max = 40): ISODate[] {
+  const out: ISODate[] = [];
+  for (let d = start; d <= end && out.length < max; d = addDays(d, 7 * everyWeeks)) out.push(d);
+  return out;
+}
+
+/** Monday–Sunday range of the school week containing a date, for quotas. */
+export function weekRange(date: ISODate): { from: ISODate; to: ISODate } {
+  const from = mondayOf(date);
+  return { from, to: addDays(from, 6) };
 }

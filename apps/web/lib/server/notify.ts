@@ -5,7 +5,7 @@ import { fmtDateLong } from "../shared/format";
 import { DEFAULT_SETTINGS, localDate } from "@sunmarke/rules";
 import { now } from "./util";
 
-export type EmailTemplate = "confirmed" | "changed" | "cancelled" | "declined" | "reminder" | "waitlist_offer";
+export type EmailTemplate = "confirmed" | "changed" | "cancelled" | "declined" | "reminder" | "waitlist_offer" | "feedback" | "no_cover";
 
 const appUrl = () => process.env.APP_URL ?? "http://localhost:3000";
 const FROM = () => process.env.LABS_FROM_ADDRESS ?? "labs@sunmarke.example";
@@ -85,6 +85,21 @@ export async function sendBookingEmail(db: Db, template: EmailTemplate, b: Booki
       action = { label: "View or cancel", url: `${appUrl()}/bookings` };
       break;
     }
+    case "feedback":
+      subject = `How did it go? ${short}`;
+      heading = "How was your lab session?";
+      paragraphs.push("One tap to rate it. Tell us about any equipment problem so the lab team can fix it.");
+      action = { label: "Rate this session", url: `${appUrl()}/bookings?rate=${b.id}` };
+      break;
+    case "no_cover":
+      subject = `Action needed: no in-charge for ${short}`;
+      heading = `${b.inchargeName} is away and nobody can cover`;
+      paragraphs.push(
+        extra.reason ? `Reason: ${extra.reason}.` : "The lab in-charge is on leave.",
+        "The booking is still in place. The lab admin will reassign it or contact you; you can also cancel and pick another slot.",
+      );
+      action = { label: "View booking", url: `${appUrl()}/bookings` };
+      break;
     case "waitlist_offer":
       subject = `Slot free: ${short}`;
       heading = "A slot you were waiting for is free";
@@ -107,4 +122,25 @@ export async function sendAdminAlert(db: Db, subject: string, rowsIn: [string, s
   for (const to of [...new Set([...admins.map((a) => a.email), ...extraTo])]) {
     await sender.send({ template: "admin_alert", to, subject: `Action needed: ${subject}`, html, text });
   }
+}
+
+/** Waitlist offer: the slot is held for this teacher until `expires`. */
+export async function sendWaitlistOffer(db: Db, o: { to: string; resourceId: string; date: string; blockId: string; expires: Date }) {
+  const r = await db.query<{ name: string; code: string; start_time: string; end_time: string }>(
+    "SELECT r.name, b.code, b.start_time, b.end_time FROM resources r, blocks b WHERE r.id = $1 AND b.id = $2",
+    [o.resourceId, o.blockId],
+  );
+  const x = r[0];
+  const until = new Date(o.expires.getTime() + DEFAULT_SETTINGS.utcOffsetMinutes * 60_000).toISOString().slice(11, 16);
+  const { html, text } = renderEmail({
+    heading: "A slot you were waiting for is free",
+    rows: [
+      ["What", x?.name ?? o.resourceId],
+      ["When", `${fmtDateLong(o.date)}, ${x?.code ?? ""} (${x?.start_time}–${x?.end_time})`],
+      ["Held for you until", `${until} today`],
+    ],
+    paragraphs: ["Book it before then. After that it goes to the next teacher on the waitlist."],
+    action: { label: "Book this slot", url: `${appUrl()}/?date=${o.date}&r=${o.resourceId}` },
+  });
+  await getEmailSender(db).send({ template: "waitlist_offer", to: o.to, subject: `Held for you until ${until}: ${x?.name}, ${fmtDateLong(o.date)} ${x?.code}`, html, text });
 }

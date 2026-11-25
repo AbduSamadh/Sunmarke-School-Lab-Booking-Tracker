@@ -90,8 +90,34 @@ export async function buildReport(db: Db, f: ReportFilters) {
   const leadDays = used.map((b) => (b.start.getTime() - b.createdAt.getTime()) / 86_400_000).filter((x) => x >= 0).sort((a, b) => a - b);
   const median = leadDays.length ? leadDays[Math.floor(leadDays.length / 2)] : 0;
 
+  // Feedback (R1.1)
+  const fb = await db.query<{ resource_id: string; n: number; avg: number }>(
+    `SELECT b.resource_id, count(*)::int AS n, avg(f.rating)::float AS avg FROM feedback f JOIN bookings b ON b.id = f.booking_id
+     WHERE b.date BETWEEN $1 AND $2 GROUP BY b.resource_id`,
+    [f.from, f.to],
+  );
+  const issues = await db.query<{ resource_id: string; open: number; total: number }>(
+    `SELECT resource_id, count(*) FILTER (WHERE status = 'open')::int AS open, count(*)::int AS total FROM equipment_issues
+     WHERE created_at::date BETWEEN $1::date AND $2::date GROUP BY resource_id`,
+    [f.from, f.to],
+  );
+  const fbCount = fb.reduce((n, r) => n + r.n, 0);
+  const feedback = {
+    count: fbCount,
+    avg: fbCount ? fb.reduce((n, r) => n + r.avg * r.n, 0) / fbCount : 0,
+    byResource: resources.map((r) => ({
+      id: r.id,
+      name: r.name,
+      ratings: fb.find((x) => x.resource_id === r.id)?.n ?? 0,
+      avg: fb.find((x) => x.resource_id === r.id)?.avg ?? null,
+      issues: issues.find((x) => x.resource_id === r.id)?.total ?? 0,
+      openIssues: issues.find((x) => x.resource_id === r.id)?.open ?? 0,
+    })),
+  };
+
   return {
     filters: f,
+    feedback,
     kpis: {
       sessions: used.length,
       teachers: new Set(used.map((b) => b.teacherId)).size,

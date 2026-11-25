@@ -9,13 +9,14 @@ import {
   type Alternative,
   type Block,
   type BlockedCode,
+  weekRange,
 } from "@sunmarke/rules";
 import type { BookingInput, BookingPatch } from "../shared/schemas";
 import { audit } from "./audit";
 import { enqueue, runJobs } from "./jobs";
 import { loadWorld, getSettings, getTimetables } from "./world";
 import { newId, now } from "./util";
-import { sendBookingEmail } from "./notify";
+import { sendBookingEmail, sendWaitlistOffer } from "./notify";
 
 export interface Actor {
   id: string;
@@ -159,10 +160,21 @@ export type CreateResult =
   | { ok: true; booking: BookingDetail; calendarChecked: boolean }
   | { ok: false; code: BlockedCode | "just_taken"; reason: string; suggestion?: string; canWaitlist: boolean; alternatives: Alternative[] };
 
-export async function createBooking(db: Db, actor: Actor, input: BookingInput, opts: { onBehalfOf?: string; runJobsNow?: boolean } = {}): Promise<CreateResult> {
+export async function createBooking(
+  db: Db,
+  actor: Actor,
+  input: BookingInput,
+  opts: { onBehalfOf?: string; runJobsNow?: boolean; recurrenceId?: string } = {},
+): Promise<CreateResult> {
   if (actor.role === "viewer") throw new AppError(403, "forbidden", "Leadership viewers cannot book.");
   const override = actor.role === "admin" && input.overrideWindow === true;
-  const teacherId = actor.role === "admin" && opts.onBehalfOf ? opts.onBehalfOf : actor.id;
+  const onBehalf = opts.onBehalfOf ?? input.onBehalfOf;
+  if (onBehalf && actor.role !== "admin") throw new AppError(403, "forbidden", "Only the lab admin can book for someone else.");
+  const teacherId = actor.role === "admin" && onBehalf ? onBehalf : actor.id;
+  if (teacherId !== actor.id) {
+    const ok = await db.query("SELECT 1 FROM staff WHERE id = $1 AND active", [teacherId]);
+    if (!ok.length) throw new AppError(422, "invalid", "That teacher is not on the staff list.");
+  }
   const t = now();
   const req = {
     resourceId: input.resourceId,
@@ -171,6 +183,9 @@ export async function createBooking(db: Db, actor: Actor, input: BookingInput, o
     units: input.cartCount ?? 1,
     now: t,
     overrideWindow: override,
+    teacherId,
+    recurring: Boolean(opts.recurrenceId),
+    usage: override ? undefined : await quotaUsage(db, teacherId, input.date),
   };
 
   // Live check with fresh calendar free/busy (R2).
@@ -198,12 +213,12 @@ export async function createBooking(db: Db, actor: Actor, input: BookingInput, o
       if (!ev.ok) throw new JustTaken(ev.reason);
       await tx.query(
         `INSERT INTO bookings (id, resource_id, date, block_ids, teacher_id, incharge_id, subject, year_group, section, student_count,
-          cart_count, classroom, objective, lesson_plan_url, special_requirements, status, cross_cover, created_by, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'confirmed',$16,$17,$18,$18)`,
+          cart_count, classroom, objective, lesson_plan_url, special_requirements, status, cross_cover, created_by, created_at, updated_at, recurrence_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'confirmed',$16,$17,$18,$18,$19)`,
         [
           id, input.resourceId, input.date, input.blockIds, teacherId, ev.inchargeId, input.subject, input.yearGroup, input.section,
           input.studentCount, resource?.type === "cart_pool" ? input.cartCount : null, resource?.type === "cart_pool" ? input.classroom : null,
-          input.objective, input.lessonPlanUrl || null, input.specialRequirements, ev.crossCover, actor.id, t.toISOString(),
+          input.objective, input.lessonPlanUrl || null, input.specialRequirements, ev.crossCover, actor.id, t.toISOString(), opts.recurrenceId ?? null,
         ],
       );
       for (const blockId of input.blockIds) {
@@ -266,18 +281,57 @@ async function releaseSlots(db: Db, id: string) {
 /** R9: free the slot, tell calendars, offer the waitlist. */
 async function afterRelease(db: Db, b: BookingDetail) {
   await enqueue(db, { kind: "calendar.delete", bookingId: b.id });
-  const waiting = await db.query<{ id: string; email: string }>(
-    `SELECT w.id, s.email FROM waitlist w JOIN staff s ON s.id = w.teacher_id
-     WHERE w.resource_id = $1 AND w.date = $2 AND w.block_id = ANY($3) AND w.status = 'waiting' ORDER BY w.created_at LIMIT 1`,
-    [b.resourceId, b.date, b.blockIds],
+  for (const blockId of b.blockIds) await offerNext(db, b.resourceId, b.date, blockId);
+}
+
+/**
+ * R1.1 waitlist: offer a freed slot to the first teacher waiting. The slot is held
+ * for them for settings.waitlistHoldHours; expireOffers() passes it on after that.
+ */
+export async function offerNext(db: Db, resourceId: string, date: string, blockId: string) {
+  const active = await db.query("SELECT 1 FROM waitlist WHERE resource_id = $1 AND date = $2 AND block_id = $3 AND status = 'offered'", [resourceId, date, blockId]);
+  if (active.length) return null;
+  const waiting = await db.query<{ id: string; email: string; teacher_id: string; units: number }>(
+    `SELECT w.id, s.email, w.teacher_id, w.units FROM waitlist w JOIN staff s ON s.id = w.teacher_id
+     WHERE w.resource_id = $1 AND w.date = $2 AND w.block_id = $3 AND w.status = 'waiting' ORDER BY w.created_at LIMIT 1`,
+    [resourceId, date, blockId],
   );
-  if (waiting[0]) {
-    const t = now();
-    await db.query("UPDATE waitlist SET status = 'offered', offered_at = $2, expires_at = $3 WHERE id = $1", [
-      waiting[0].id, t.toISOString(), new Date(t.getTime() + 2 * 3_600_000).toISOString(),
-    ]);
-    await sendBookingEmail(db, "waitlist_offer", b, "teacher", { to: waiting[0].email });
-  }
+  if (!waiting[0]) return null;
+  const t = now();
+  const settings = await getSettings(db);
+  // Only offer when the teacher could actually book it now.
+  const world = await loadWorld(db, date, date);
+  const ev = evaluate(world, { resourceId, date, blockIds: [blockId], units: waiting[0].units, now: t, teacherId: waiting[0].teacher_id });
+  if (!ev.ok) return null;
+  const expires = new Date(t.getTime() + settings.waitlistHoldHours * 3_600_000);
+  await db.query("UPDATE waitlist SET status = 'offered', offered_at = $2, expires_at = $3 WHERE id = $1", [waiting[0].id, t.toISOString(), expires.toISOString()]);
+  await audit(db, { actorId: null, action: "waitlist.offer", entity: "waitlist", entityId: waiting[0].id, after: { expires } });
+  await sendWaitlistOffer(db, { to: waiting[0].email, resourceId, date, blockId, expires });
+  return waiting[0].id;
+}
+
+/** Cron: expired offers lapse and the slot goes to the next teacher waiting. */
+export async function expireOffers(db: Db) {
+  const t = now();
+  const lapsed = await db.query<{ id: string; resource_id: string; date: string; block_id: string }>(
+    "UPDATE waitlist SET status = 'expired' WHERE status = 'offered' AND expires_at <= $1 RETURNING id, resource_id, date, block_id",
+    [t.toISOString()],
+  );
+  for (const w of lapsed) await offerNext(db, w.resource_id, w.date, w.block_id);
+  return lapsed.length;
+}
+
+async function quotaUsage(db: Db, teacherId: string, date: string) {
+  const { from, to } = weekRange(date);
+  const r = await db.query<{ teacher: number; dept: number }>(
+    `SELECT
+       count(*) FILTER (WHERE b.teacher_id = $1)::int AS teacher,
+       count(*) FILTER (WHERE t.department = (SELECT department FROM staff WHERE id = $1) AND t.department <> '')::int AS dept
+     FROM booking_slots s JOIN bookings b ON b.id = s.booking_id JOIN staff t ON t.id = b.teacher_id
+     WHERE s.active AND s.date BETWEEN $2 AND $3`,
+    [teacherId, from, to],
+  );
+  return { teacherWeek: r[0]?.teacher ?? 0, deptWeek: r[0]?.dept ?? 0 };
 }
 
 export async function cancelBooking(db: Db, actor: Actor, id: string, opts: { undo?: boolean } = {}) {

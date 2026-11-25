@@ -63,8 +63,9 @@ describe("database-backed rules", () => {
     const evAfter = await db.query("SELECT * FROM calendar_events WHERE active AND booking_id = $1", [r.booking.id]);
     expect(evAfter).toHaveLength(0);
     const mails = await db.query<{ template: string; recipient: string }>("SELECT template, recipient FROM notifications WHERE booking_id = $1", [r.booking.id]);
-    expect(mails.map((m) => m.template)).toEqual(expect.arrayContaining(["confirmed", "cancelled", "waitlist_offer"]));
-    expect(mails.find((m) => m.template === "waitlist_offer")?.recipient).toBe("omar.haddad@sunmarke.example");
+    expect(mails.map((m) => m.template)).toEqual(expect.arrayContaining(["confirmed", "cancelled"]));
+    const offer = await db.query<{ recipient: string }>("SELECT recipient FROM notifications WHERE template = 'waitlist_offer'");
+    expect(offer[0]?.recipient).toBe("omar.haddad@sunmarke.example");
   });
 
   it("T10 an outside meeting added after booking is flagged, booking unchanged", async () => {
