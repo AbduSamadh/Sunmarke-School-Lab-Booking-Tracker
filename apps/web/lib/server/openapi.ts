@@ -25,7 +25,7 @@ const date = "School-local date, YYYY-MM-DD (Asia/Dubai)";
 export const OPS: Op[] = [
   { method: "get", path: "/session", tag: "Session", public: true, summary: "Who is signed in ({ actor } or { actor: null })." },
   { method: "post", path: "/session", tag: "Session", public: true, body: S.SignInInput, summary: "Pilot sign-in by school email. Send client: \"app\" to get a 30-day Bearer token for the phone app. Replaced by Google / Microsoft sign-in when IT enables it." },
-  { method: "post", path: "/session/signout", tag: "Session", summary: "Sign out (clears the cookie)." },
+  { method: "post", path: "/session/signout", tag: "Session", public: true, summary: "Sign out (clears the cookie)." },
   { method: "get", path: "/campus", tag: "Session", summary: "Campuses the signed-in person can switch to." },
   { method: "post", path: "/campus", tag: "Session", body: S.CampusSwitch, summary: "Switch campus (group admins and leadership only). Form posts redirect back." },
   { method: "get", path: "/availability", tag: "Booking", query: [["from", date, true], ["to", `${date}; up to 14 days after from`]], summary: "The booking grid: blocks × labs per day, each cell free, booked, closed or unavailable with the reason. Scoped to your campus." },

@@ -165,6 +165,7 @@
           "Session"
         ],
         "summary": "Sign out (clears the cookie).",
+        "security": [],
         "responses": {
           "200": {
             "description": "OK",
@@ -172,16 +173,6 @@
               "application/json": {
                 "schema": {
                   "type": "object"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not signed in",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
