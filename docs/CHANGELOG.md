@@ -19,6 +19,7 @@ abd's changes of 25 Nov.
 - Shareable demo: `apps/demo` builds one HTML file (`pnpm --filter demo build`) that runs the real booking rules in the browser with sample data. It needs no install or server and sends nothing anywhere.
 - Full demo site to share: `apps/demo/package-site.sh` builds two zips (Windows, Mac) with the whole site, its own Node.js and double-click start files. It runs only on that computer at http://localhost:3210, keeps its data in the folder, and sends nothing anywhere.
 - Sign-in page headline: "Lab Booking, made simple." (abd).
+- Sample data: today's first two periods already have sessions, so the in-charge view can show attendance at any time of day.
 - Booking messages now say "Teams message" instead of "email". Form redirects use a relative address so they work behind a proxy.
 - Existing local data: run `pnpm db:reset` to pick up the new schema columns, Nael, Dr. Sreejit and the new rules.
 

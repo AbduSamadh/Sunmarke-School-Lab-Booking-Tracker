@@ -155,6 +155,28 @@ async function seedUpcoming(db: Db) {
       await createBooking(db, admin, { ...base, resourceId, date: today, blockIds: [P(block)], ...extra } as Parameters<typeof createBooking>[2], { onBehalfOf: teacher }).catch(() => undefined);
     }
   }
+  // Today's earlier sessions, already started, so the in-charge view can show attendance at any time of day.
+  if (isoWeekday(today) <= 5) {
+    const world = await loadWorld(db, today, today, { skipCalendar: true });
+    const fakeNow = localToInstant(addDays(today, -2), "08:00", DEFAULT_SETTINGS);
+    for (const [block, resourceId, teacher, subject, year, section, n, carts] of [
+      ["P1", "quantum", "t-omar", "Computing", "Y9", "A", 23, null],
+      ["P2", "carts", "t-lucy", "Maths", "Y7", "C", 25, 1],
+    ] as const) {
+      const ev = evaluate(world, { resourceId, date: today, blockIds: [P(block)], units: carts ?? 1, now: fakeNow });
+      if (!ev.ok) continue;
+      const id = newId("bk");
+      await db.query(
+        `INSERT INTO bookings (id, resource_id, date, block_ids, teacher_id, incharge_id, subject, year_group, section, student_count, cart_count, classroom, status, cross_cover, created_by, created_at, support_ids)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'confirmed',$13,$5,$14,$15)`,
+        [id, resourceId, today, [P(block)], teacher, ev.inchargeId, subject, year, section, n, carts, carts ? "Room 1.12" : null, ev.crossCover, fakeNow.toISOString(), ev.inchargeIds.slice(1)],
+      );
+      for (const who of ev.inchargeIds) {
+        await db.query("INSERT INTO booking_slots (booking_id, incharge_id, resource_id, room_key, date, block_id, units) VALUES ($1,$2,$3,$4,$5,$6,1)", [id, who, resourceId, carts ? null : resourceId, today, P(block)]);
+        world.holds.push({ bookingId: id, resourceId, inchargeId: who, date: today, blockId: P(block), units: 1 });
+      }
+    }
+  }
   // An outside meeting in Ram's calendar (shows cross-cover in the grid).
   await addExternalEvent(db, "ram", localToInstant(addDays(mon, 3), "10:00", DEFAULT_SETTINGS), localToInstant(addDays(mon, 3), "11:00", DEFAULT_SETTINGS), "Department meeting");
   // A maintenance day the following week.
