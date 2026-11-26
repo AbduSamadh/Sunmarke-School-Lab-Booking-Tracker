@@ -1,5 +1,5 @@
 import type { Db } from "@sunmarke/db";
-import { addDays, findConflicts, localDate, timetableForDate } from "@sunmarke/rules";
+import { addDays, findConflicts, localDate, timetableForDate, blockOn } from "@sunmarke/rules";
 import { expireOffers, getBookingDetail, listBookings } from "./bookings";
 import { markNoShows, sendFeedbackRequests } from "./release11";
 import { buildReport } from "./reports";
@@ -47,7 +47,7 @@ export async function sendDailyDigest(db: Db, date?: string) {
   const sessions = await listBookings(db, { from: day, to: day, status: ["confirmed"] });
   let sent = 0;
   for (const ic of incharges) {
-    const mine = sessions.filter((b) => b.inchargeId === ic.id);
+    const mine = sessions.filter((b) => b.staffIds.includes(ic.id));
     const already = await db.query("SELECT 1 FROM notifications WHERE template = 'digest' AND recipient = $1 AND subject LIKE $2", [ic.email, `%${fmtDateLong(day)}%`]);
     if (already.length) continue;
     const rows: [string, string][] = mine.length
@@ -78,7 +78,7 @@ export async function syncConflicts(db: Db) {
     if (!r.length) continue;
     fresh++;
     const staff = world.staffRows.find((s) => s.id === c.inchargeId);
-    const block = timetableForDate(world.timetables, c.date)?.blocks.find((b) => b.id === c.blockId);
+    const block = blockOn(world.timetables, c.date, c.blockId);
     const bk = await getBookingDetail(db, c.bookingId);
     await sendAdminAlert(
       db,

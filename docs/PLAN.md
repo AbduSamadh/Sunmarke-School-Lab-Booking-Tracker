@@ -74,13 +74,17 @@ or Ramadan timetable with its own date range (D1, D2).
 
 ### Resources
 
-| Resource    | Type        | Units    | Where the session happens | Primary in-charge | Fallback |
-|-------------|-------------|----------|---------------------------|-------------------|----------|
-| Quantum Lab | Room        | 1        | In the lab                | Ram               | Abdul    |
-| AI Carts    | Mobile pool | 10 carts | Teacher's classroom       | Ram               | Abdul    |
-| DollarX Lab | Room        | 1        | In the lab                | Abdul             | Ram      |
-| XReal Lab   | Room        | 1        | In the lab                | Abdul             | Ram      |
-| Strike Lab  | Room        | 1        | In the lab                | Abdul             | Ram      |
+| Resource    | Type        | Units    | Where the session happens | In-charge order (25 Nov 2026) |
+|-------------|-------------|----------|---------------------------|-------------------------------|
+| Quantum Lab | Room        | 1        | In the lab                | Ram, Nael, Abdul              |
+| AI Carts    | Mobile pool | 10 carts | Teacher's classroom       | Ram, Nael, Abdul              |
+| DollarX Lab | Hybrid room | 1        | In the lab                | Abdul, Ram, Nael              |
+| XReal Lab   | Hybrid room | 1        | In the lab                | Abdul, Ram, Nael              |
+| Strike Lab  | Hybrid room | 1        | In the lab                | Abdul, Ram, Nael              |
+
+Hybrid labs also host the school's regular ICT lessons. Those periods are on the
+lab's weekly timetable (Admin › Labs and carts › Timetabled lessons) and are
+never bookable.
 
 The primary/fallback mapping is a settings table, so adding a third
 in-charge or a sixth lab needs no code change.
@@ -88,9 +92,11 @@ in-charge or a sixth lab needs no code change.
 ### Booking rules
 
 1.  **R1 Resource free.** A room is free when it has no confirmed
-    booking and no blackout (holiday, exam, maintenance) in that block.
+    booking, no blackout (holiday, exam, maintenance) and no timetabled
+    lesson (ICT in the hybrid labs) in that block.
     AI Carts are free when requested carts ≤ 10 minus carts already
-    booked in that block.
+    booked in that block. A booking takes at most 3 carts, and each
+    cart goes with its own free in-charge (changed by abd, 25 Nov 2026).
 
 2.  **R2 In-charge free.** The in-charge must have no booking in this
     app *and* show free in their Google/Outlook calendar for the whole
@@ -104,12 +110,15 @@ in-charge or a sixth lab needs no code change.
     class, or any calendar event), assign the other in-charge if free.
     The teacher sees who is coming before confirming.
 
-5.  **R5 No in-charge, no booking.** If neither is free, the block shows
+5.  **R5 No in-charge, no booking.** If no listed in-charge is free
+    (in the lab's in-charge order), the block shows
     as unavailable, with the reason "No lab in-charge available". The
     teacher can join the waitlist.
 
 6.  **R6 One place at a time.** An in-charge can hold only one booking
-    per block, lab or cart.
+    per block, lab or cart. With 3 carts out, all 3 in-charges are
+    busy, so nothing else can be booked in that block.
+    Every booking is one period (double lessons removed, 25 Nov 2026).
 
 7.  **R7 No double booking under load.** Two teachers clicking the same
     slot at the same moment: exactly one wins. Enforced by a database
@@ -208,6 +217,9 @@ Items marked PM are additions beyond the original brief.
 - PDF report export and scheduled weekly report email to leadership
 
 ### Release 2 (mobile and scale)
+
+Status 25 Nov 2026: built except Teams / Google Chat (needs Fortes IT). The
+Arabic UI was dropped by abd. See docs/specs/release-2.md.
 
 - Native iOS/Android app (Expo, same API) with push notifications
 

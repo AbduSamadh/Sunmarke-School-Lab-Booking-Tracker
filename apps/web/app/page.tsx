@@ -19,6 +19,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
   const resourceFilter = grid.resources.some((r) => r.id === sp.r) ? sp.r! : null;
 
   const lookups = await db.query<{ kind: string; value: string }>("SELECT kind, value FROM lookups ORDER BY kind, sort");
+  const curriculum = await db.query<{ id: string; code: string; strand: string; title: string; yearGroup: string }>(
+    `SELECT id, code, strand, title, year_group AS "yearGroup" FROM curriculum_levels WHERE active ORDER BY sort, code`,
+  );
   const last = await db.query<{ subject: string; year_group: string; section: string; student_count: number; classroom: string | null }>(
     "SELECT subject, year_group, section, student_count, classroom FROM bookings WHERE teacher_id = $1 ORDER BY created_at DESC LIMIT 1",
     [actor.id],
@@ -30,7 +33,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
 
   const people =
     actor.role === "admin"
-      ? await db.query<{ id: string; name: string; department: string }>("SELECT id, name, department FROM staff WHERE active AND role IN ('teacher','incharge','admin') ORDER BY name")
+      ? await db.query<{ id: string; name: string; department: string }>("SELECT id, name, department FROM staff WHERE active AND role IN ('teacher','incharge','admin') AND campus_id = $1 ORDER BY name", [actor.campusId ?? "sunmarke"])
       : [];
 
   return (
@@ -47,6 +50,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
         subjects: lookups.filter((l) => l.kind === "subject").map((l) => l.value),
         years: lookups.filter((l) => l.kind === "year_group").map((l) => l.value),
         sections: lookups.filter((l) => l.kind === "section").map((l) => l.value),
+        curriculum,
       }}
       defaults={{
         subject: last[0]?.subject ?? "",

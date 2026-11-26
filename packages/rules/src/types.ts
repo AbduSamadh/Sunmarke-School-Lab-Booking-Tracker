@@ -26,6 +26,8 @@ export interface Timetable {
   /** Higher wins when two timetables cover the same date. Standard = 0. */
   priority: number;
   blocks: Block[];
+  /** Release 2 multi-campus: the campus this timetable belongs to. Unset = every campus. */
+  campusId?: string;
 }
 
 export type ResourceType = "room" | "cart_pool";
@@ -36,6 +38,8 @@ export interface Resource {
   type: ResourceType;
   units: number; // 1 for rooms, 10 for the AI Cart pool
   active: boolean;
+  /** Release 2 multi-campus. Unset = the single-campus behaviour. */
+  campusId?: string;
 }
 
 export interface InchargeAssignment {
@@ -69,6 +73,22 @@ export interface Blackout {
   blockCodes: string[] | null; // null = whole day
   reason: BlackoutReason;
   note?: string;
+  /** For a whole-school blackout (resourceId null): the campus it closes. Unset = every campus. */
+  campusId?: string | null;
+}
+
+/**
+ * A lesson on the school's own weekly timetable that uses a lab (hybrid labs such as
+ * Strike, XReal and DollarX also host regular ICT lessons). The lab is not bookable then.
+ */
+export interface TimetabledLesson {
+  id: string;
+  resourceId: string;
+  /** ISO weekday, 1 = Monday. */
+  weekday: number;
+  blockCode: string;
+  /** Shown in the grid, e.g. "ICT Y8 B". */
+  label: string;
 }
 
 /** A busy interval from an in-charge's own calendar (meetings, leave...). */
@@ -87,7 +107,8 @@ export interface RuleSettings {
   minLeadHours: number; // D6: 24
   maxLeadDays: number; // D6: 28
   cancelCutoffHours: number; // D6: 2
-  maxCartsPerBooking: number; // D4: 10
+  /** abd, 25 Nov: at most 3 carts, because each cart goes out with its own lab in-charge. */
+  maxCartsPerBooking: number;
   /** Fair-use quota: most lab blocks one teacher may hold in a school week. 0 = no limit. */
   quotaPerTeacherWeek: number;
   /** Fair-use quota: most lab blocks one department may hold in a school week. 0 = no limit. */
@@ -105,7 +126,7 @@ export const DEFAULT_SETTINGS: RuleSettings = {
   minLeadHours: 24,
   maxLeadDays: 28,
   cancelCutoffHours: 2,
-  maxCartsPerBooking: 10,
+  maxCartsPerBooking: 3,
   quotaPerTeacherWeek: 0,
   quotaPerDeptWeek: 0,
   waitlistHoldHours: 2,
@@ -126,6 +147,8 @@ export interface WorldState {
   offers?: WaitlistOffer[];
   /** In-charge leave or absence (R1.1 leave and cover). */
   absences?: Absence[];
+  /** Weekly timetabled lessons that occupy a lab (hybrid labs). */
+  lessons?: TimetabledLesson[];
 }
 
 export interface WaitlistOffer {
@@ -181,6 +204,7 @@ export type BlockedCode =
   | "window_too_far"
   | "in_past"
   | "blackout"
+  | "timetabled"
   | "resource_booked"
   | "not_enough_carts"
   | "invalid_units"
@@ -194,6 +218,12 @@ export interface Allocation {
   inchargeName: string;
   crossCover: boolean; // true when the fallback covers
   unitsLeftAfter: number;
+  /**
+   * Everyone going with the booking, lead first. One for a lab; one per cart for
+   * AI Carts (abd, 25 Nov: every cart is accompanied by its own in-charge).
+   */
+  inchargeIds: string[];
+  inchargeNames: string[];
 }
 
 export interface Blocked {

@@ -73,6 +73,8 @@ describe("leave and cover", () => {
     const b = await createBooking(db, omar, q("P4", TUE, "strike")); // Abdul busy at P4
     const c = await createBooking(db, lucy, q("P5"));
     if (!a.ok || !b.ok || !c.ok) throw new Error("setup");
+    // Nael (the third in-charge) is away too, so only Abdul can cover, and only when free.
+    await db.query("INSERT INTO absences (id, staff_id, date_from, date_to, reason) VALUES ('abs-nael','nael',$1,$1,'Course')", [TUE]);
     const res = await addAbsence(db, ram, { staffId: "ram", dateFrom: TUE, dateTo: TUE, blockCodes: null, reason: "Training" });
     expect(res).toMatchObject({ reassigned: 1, uncovered: 1 });
     const rows = await db.query<{ id: string; incharge_id: string }>("SELECT id, incharge_id FROM bookings WHERE id = ANY($1)", [[a.booking.id, c.booking.id]]);
@@ -141,7 +143,7 @@ describe("feedback and equipment", () => {
 
 describe("weekly report", () => {
   it("emails admin and leadership once per week", async () => {
-    expect(await sendWeeklyReport(db)).toBe(2);
+    expect(await sendWeeklyReport(db)).toBe(5); // Abd, Dr. Neil, Dr. Sreejit, the Principal and the BOD
     expect(await sendWeeklyReport(db)).toBe(0);
   });
 });

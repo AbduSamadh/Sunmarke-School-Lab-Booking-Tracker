@@ -3,7 +3,7 @@ import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import * as z from "zod/v4";
 import type { Db } from "@sunmarke/db";
 import { book, cancel, context, free, mine, rules, waitlistCard, who, type AssistantReply, type Draft, type History } from "./assistant";
-import type { Actor } from "./bookings";
+import { campusOf, type Actor } from "./bookings";
 import { fmtDateLong } from "../shared/format";
 
 /**
@@ -22,10 +22,10 @@ let client: Anthropic | null = null;
 const getClient = () => (client ??= new Anthropic({ maxRetries: 1, timeout: 30_000 }));
 
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("School day as YYYY-MM-DD (Asia/Dubai).");
-const Blocks = z.array(z.string().regex(/^[A-Za-z0-9]{1,10}$/)).min(1).max(3).describe('Period codes such as ["P3"] or ["P3","P4"] for a double.');
+const Blocks = z.array(z.string().regex(/^[A-Za-z0-9]{1,10}$/)).min(1).max(1).describe('One period code such as ["P3"]. Double lessons are not offered.');
 
 export async function askClaude(db: Db, actor: Actor, message: string, history: History): Promise<AssistantReply> {
-  const ctx = await context(db);
+  const ctx = await context(db, campusOf(actor));
   // Cards produced by tools in this turn; the latest of each kind is shown under Claude's answer.
   const cards: AssistantReply = { text: [] };
   const keep = (r: AssistantReply) => {
@@ -53,7 +53,7 @@ export async function askClaude(db: Db, actor: Actor, message: string, history: 
       inputSchema: z.object({
         resourceId: z.string(), date: Day, blockCodes: Blocks,
         subject: z.string().optional(), yearGroup: z.string().optional().describe('e.g. "Y8" or "FS2"'), section: z.string().optional(),
-        studentCount: z.number().int().min(1).max(60).optional(), cartCount: z.number().int().min(1).max(10).optional(), classroom: z.string().optional(),
+        studentCount: z.number().int().min(1).max(60).optional(), cartCount: z.number().int().min(1).max(3).optional(), classroom: z.string().optional(),
         inchargeId: z.string().optional().describe("Only if the person asked for a specific in-charge."),
         forStaffId: z.string().optional().describe("Lab admin only: the teacher this booking is for."),
       }),

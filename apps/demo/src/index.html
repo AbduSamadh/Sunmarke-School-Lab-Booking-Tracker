@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sunmarke Lab Booking demo</title>
+<meta name="description" content="A working demo of the Sunmarke School lab and AI Cart booking app. Sample data, runs in your browser.">
+<link rel="icon" href="__MARK__">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nova+Square&family=Tektur:wght@400..800&display=swap">
+<style>__TOKENS__
+__CSS__</style>
+</head>
+<body>
+<a class="skip" href="#view">Skip to content</a>
+<div class="demobar" role="note">Demo with sample data. It runs in your browser; nothing is sent anywhere. Messages that would go to Teams are shown here.</div>
+<header class="top">
+  <div class="top-in">
+    <span class="brand"><img class="logo light" src="__LOGO__" alt="Sunmarke School" height="40"><img class="logo dark" src="__LOGO_DARK__" alt="Sunmarke School" height="40"><span class="app">Lab Booking</span></span>
+    <div class="who">
+      <label for="who">Viewing as</label>
+      <select id="who"></select>
+      <span id="who-role" class="small muted"></span>
+    </div>
+    <button type="button" class="btn" id="theme" aria-pressed="false">Dark mode</button>
+  </div>
+  <nav class="tabs-wrap" aria-label="Sections"><div id="tabs" class="tabs" role="tablist"></div></nav>
+</header>
+<main id="view" class="main" tabindex="-1"></main>
+<dialog id="sheet" aria-labelledby="sheet-title"></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<footer class="foot-site"><img class="logo light" src="__LOGO__" alt="" height="30"><img class="logo dark" src="__LOGO_DARK__" alt="" height="30"><span class="small muted">Sunmarke School Lab Booking · part of</span><img class="logo light" src="__FORTES__" alt="Fortes Education" height="36"><img class="logo dark" src="__FORTES_DARK__" alt="Fortes Education" height="36"></footer>
+<script>__JS__</script>
+</body>
+</html>

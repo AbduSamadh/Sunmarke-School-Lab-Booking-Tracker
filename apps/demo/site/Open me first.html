@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sunmarke Lab Booking demo</title>
+<style>
+  :root { --bg: #f7f8fb; --panel: #ffffff; --text: #14213d; --muted: #4a5568; --accent: #1d3a8a; --ok: #1f7a4d; --line: #d9deea; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0f1424; --panel: #182038; --text: #eef1f8; --muted: #b4bdd3; --accent: #9db7ff; --ok: #6fd3a0; --line: #2c3757; } }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 16px 48px; }
+  h1 { font-size: 1.7rem; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 24px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin-bottom: 16px; }
+  h2 { font-size: 1.1rem; margin: 0 0 8px; }
+  ol { margin: 0; padding-left: 1.3em; }
+  li { margin: 4px 0; }
+  code, .file { font-family: ui-monospace, Consolas, monospace; font-size: .95em; background: color-mix(in srgb, var(--accent) 10%, transparent); padding: 1px 5px; border-radius: 4px; }
+  .btn { display: inline-block; background: var(--accent); color: var(--bg); text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600; }
+  .btn:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+  #status { margin: 10px 0 0; color: var(--muted); }
+  #status.up { color: var(--ok); font-weight: 600; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sunmarke Lab Booking demo</h1>
+  <p class="lead">The full booking site, running on your own computer. Nothing to install, and nothing is sent anywhere.</p>
+
+  <section>
+    <h2>1. Start it</h2>
+    <ol>
+      <li>Unzip the whole folder first (right-click the zip, then <b>Extract All</b>). It will not run from inside the zip.</li>
+      <li><b>Windows:</b> double-click <span class="file">Start demo (Windows).bat</span>. If Windows shows "Windows protected your PC", choose <b>More info</b>, then <b>Run anyway</b>.</li>
+      <li><b>Mac:</b> right-click <span class="file">Start demo (Mac).command</span>, choose <b>Open</b>, then <b>Open</b> again.</li>
+      <li>A small window opens and your browser opens the site after a few seconds. Keep that window open while you use the demo. Closing it stops the demo.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>2. Open the site</h2>
+    <p><a class="btn" href="http://localhost:3210/">Open the demo site</a></p>
+    <p id="status" role="status">If the button shows an error, start the demo first (step 1).</p>
+  </section>
+
+  <section>
+    <h2>3. Sign in</h2>
+    <p>On the sign-in page, press <b>Try a demo account</b> and pick anyone. Some to try:</p>
+    <table>
+      <tr><th scope="col">Account</th><th scope="col">What you see</th></tr>
+      <tr><td>A teacher (Sara Khan)</td><td>Book a lab or AI Carts from the week grid, My bookings, the booking assistant</td></tr>
+      <tr><td>Ram, Abdul or Nael</td><td>The lab in-charge calendar, today's sessions, leave and blocked time</td></tr>
+      <tr><td>Abd</td><td>Admin: labs, staff, timetables, rules, and booking for any teacher</td></tr>
+      <tr><td>Dr. Sreejit or Dr. Neil</td><td>Reports by lab, teacher and in-charge, with CSV downloads</td></tr>
+    </table>
+    <p>Sign-in here is a stand-in. The real site will use school Google or Microsoft sign-in.</p>
+  </section>
+
+  <section>
+    <h2>Good to know</h2>
+    <ol>
+      <li>Bookings you make are kept in the <span class="file">data</span> folder, so they are still there next time. To start over, close the demo and double-click <span class="file">Reset demo data</span>.</li>
+      <li>Teams messages are not sent. You can read them on the site's Messages page.</li>
+      <li>The site only answers on this computer, so other people on the network cannot reach it.</li>
+    </ol>
+  </section>
+</main>
+<script>
+  // Shows whether the demo is running. Only talks to this computer.
+  const s = document.getElementById("status");
+  function check() {
+    fetch("http://localhost:3210/signin", { mode: "no-cors", cache: "no-store" })
+      .then(() => { s.textContent = "The demo is running."; s.className = "up"; })
+      .catch(() => { s.textContent = "The demo is not running yet. Start it with step 1."; s.className = ""; setTimeout(check, 2000); });
+  }
+  check();
+</script>
+</body>
+</html>

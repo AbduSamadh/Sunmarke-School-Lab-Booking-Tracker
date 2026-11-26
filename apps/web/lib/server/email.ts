@@ -15,6 +15,8 @@ export interface OutgoingEmail {
   html: string;
   text: string;
   ics?: string;
+  /** The main button (Teams card) / link (email). */
+  action?: { label: string; url: string };
 }
 
 export interface EmailSender {
@@ -33,8 +35,60 @@ export class DevOutbox implements EmailSender {
   }
 }
 
+/**
+ * Microsoft Teams (abd, 25 Nov 2026: Teams messages instead of email).
+ * Every message is kept in the notifications table (the Messages page and the audit trail).
+ * When TEAMS_WORKFLOW_URL is set, it is also posted to a Teams Workflows (Power Automate)
+ * webhook, which sends the card to the person as a chat from the Workflows bot.
+ * No Azure app registration or Graph permission is needed for that route; see docs/TEAMS.md.
+ */
+export class TeamsSender implements EmailSender {
+  readonly name = "teams";
+  constructor(private db: Db, private url = process.env.TEAMS_WORKFLOW_URL) {}
+  async send(m: OutgoingEmail) {
+    const id = newId("ntf");
+    await this.db.query(
+      "INSERT INTO notifications (id, booking_id, template, recipient, subject, body_html, body_text, ics, channel, status) VALUES ($1,$2,$3,$4,$5,$6,$7,NULL,'teams',$8)",
+      [id, m.bookingId ?? null, m.template, m.to, m.subject, m.html, m.text, this.url ? "queued" : "sent"],
+    );
+    if (!this.url) return; // pilot: simulated, shown on the Messages page only
+    try {
+      const r = await fetch(this.url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ to: m.to, subject: m.subject, text: m.text, card: teamsCard(m) }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!r.ok) throw new Error(`Teams workflow answered ${r.status}`);
+      await this.db.query("UPDATE notifications SET status = 'sent' WHERE id = $1", [id]);
+    } catch (e) {
+      await this.db.query("UPDATE notifications SET status = 'failed', error = $2 WHERE id = $1", [id, e instanceof Error ? e.message : String(e)]);
+      throw e; // the job runner retries
+    }
+  }
+}
+
+/** An Adaptive Card (v1.4, what Teams renders) with the message and its button. */
+export function teamsCard(m: OutgoingEmail) {
+  const lines = m.text.split("\n").map((l) => l.trim()).filter((l) => l && (!m.action || !l.includes(m.action.url)));
+  const facts = lines.filter((l) => /^[A-Z][\w -]{1,24}: /.test(l)).map((l) => ({ title: l.slice(0, l.indexOf(":")), value: l.slice(l.indexOf(":") + 2) }));
+  const prose = lines.filter((l) => !/^[A-Z][\w -]{1,24}: /.test(l)).slice(1);
+  return {
+    type: "AdaptiveCard",
+    $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+    version: "1.4",
+    body: [
+      { type: "TextBlock", text: m.subject, weight: "Bolder", size: "Medium", wrap: true },
+      ...(facts.length ? [{ type: "FactSet", facts }] : []),
+      ...prose.map((t) => ({ type: "TextBlock", text: t, wrap: true })),
+    ],
+    actions: m.action ? [{ type: "Action.OpenUrl", title: m.action.label, url: m.action.url }] : [],
+  };
+}
+
+/** Teams by default; NOTIFY_CHANNEL=email switches back to the email outbox. */
 export function getEmailSender(db: Db): EmailSender {
-  return new DevOutbox(db);
+  return process.env.NOTIFY_CHANNEL === "email" ? new DevOutbox(db) : new TeamsSender(db);
 }
 
 // ---------------------------------------------------------------------------

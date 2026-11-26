@@ -9,6 +9,8 @@ export interface Row {
   classLabel: string; subject: string; studentCount: number; cartCount: number | null; classroom: string | null; objective: string;
   specialRequirements: string; status: string; statusReason: string | null; cancellable: boolean;
   recurrenceId: string | null; rating: number | null; started: boolean;
+  /** Release 2: KS3 plan level codes. */
+  curriculum?: string[];
 }
 
 const STATUS: Record<string, [string, string]> = {
@@ -84,6 +86,7 @@ function Item({ b, past, rateOpen }: { b: Row; past?: boolean; rateOpen?: boolea
           {b.cartCount ? <span className="small">{b.cartCount} carts to {b.classroom}</span> : null}
           <span className={`tag ${cls}`}>{st}</span>
           {b.recurrenceId && b.status === "confirmed" ? <span className="tag">Repeating</span> : null}
+          {b.curriculum?.map((c) => <span key={c} className="tag" title="Curriculum level">{c}</span>)}
           {b.rating !== null ? <span className="small muted">Rated {b.rating} of 5</span> : null}
         </div>
         <div className="small muted">

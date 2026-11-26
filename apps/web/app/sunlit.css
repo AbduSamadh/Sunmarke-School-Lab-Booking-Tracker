@@ -371,3 +371,21 @@ h1, h2, h3, .display { font-weight: 700; }
 @media (max-width: 1100px) { .ic-layout { grid-template-columns: minmax(0, 1fr); } .ic-side { position: static; order: -1; } }
 @media (max-width: 760px) { .ic-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ic-tabs { border-radius: 14px; } }
 .ic-cal, .ic-side { min-width: 0; }
+
+/* Release 2: curriculum level picker in the booking sheet ----------------- */
+.curriculum-pick { border: 0; padding: 0; margin: 0 0 12px; min-width: 0; }
+.curriculum-pick legend { font-weight: 600; font-size: 14px; margin-bottom: 6px; padding: 0; }
+.curriculum-pick .chips { display: flex; flex-direction: column; gap: 6px; }
+.chip-check {
+  display: flex; gap: 10px; align-items: flex-start; min-height: 44px; padding: 8px 12px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface);
+  font-size: 14px; cursor: pointer; transition: border-color 120ms ease, background-color 120ms ease;
+}
+.chip-check input { width: 20px; height: 20px; flex: none; margin: 0; }
+.chip-check.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.chip-check:has(input:disabled) { opacity: 0.6; cursor: not-allowed; }
+.chip-check:focus-within { box-shadow: var(--focus); }
+
+/* Release 2: campus switch in the top bar (group admins only) */
+.campus-switch { display: flex; align-items: center; gap: 6px; }
+.campus-switch select { min-height: 36px; max-width: 160px; }

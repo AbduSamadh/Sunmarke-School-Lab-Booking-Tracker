@@ -91,9 +91,9 @@ describe("assistant answers from the rules engine", () => {
 
 describe("assistant follow-ups", () => {
   it("a follow-up message updates the proposed booking", async () => {
-    const a = await ask(db, omar, "I need 4 carts on 22 dec p2 computing y9 a 20 students room 2.14");
-    expect(a.proposal?.input).toMatchObject({ cartCount: 4, classroom: "Room 2.14" });
-    const b = await ask(db, omar, "make it 6 carts and room 3.01", a.draft);
-    expect(b.proposal?.input).toMatchObject({ resourceId: "carts", cartCount: 6, classroom: "Room 3.01", date: "2026-12-22" });
+    const a = await ask(db, omar, "I need 2 carts on 22 dec p2 computing y9 a 20 students room 2.14");
+    expect(a.proposal?.input).toMatchObject({ cartCount: 2, classroom: "Room 2.14" });
+    const b = await ask(db, omar, "make it 3 carts and room 3.01", a.draft);
+    expect(b.proposal?.input).toMatchObject({ resourceId: "carts", cartCount: 3, classroom: "Room 3.01", date: "2026-12-22" });
   });
 });

@@ -10,13 +10,15 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   const [seriesCancelled, seriesKept] = (series ?? "").split("-").map(Number);
   const actor = await requireActor(["teacher", "incharge", "admin"]);
   const db = await getDb();
+  const levels = new Map((await db.query<{ id: string; code: string }>("SELECT id, code FROM curriculum_levels")).map((l) => [l.id, l.code]));
   const t = now();
   const all = await listBookings(db, { teacherId: actor.id, from: addDays(localDate(t, DEFAULT_SETTINGS), -60) });
   const toRow = (b: (typeof all)[number]): Row => ({
     id: b.id, resourceId: b.resourceId, resourceName: b.resourceName, colour: b.resourceColour, date: b.date, blockLabel: b.blockLabel, timeLabel: b.timeLabel,
-    inchargeName: b.inchargeName, classLabel: b.classLabel, subject: b.subject, studentCount: b.studentCount, cartCount: b.cartCount, classroom: b.classroom,
+    inchargeName: [b.inchargeName, ...b.supportNames].join(", "), classLabel: b.classLabel, subject: b.subject, studentCount: b.studentCount, cartCount: b.cartCount, classroom: b.classroom,
     objective: b.objective, specialRequirements: b.specialRequirements, status: b.status, statusReason: b.statusReason,
     recurrenceId: b.recurrenceId, rating: b.rating, started: b.start.getTime() <= t.getTime(),
+    curriculum: b.curriculumIds.map((id) => levels.get(id)).filter(Boolean) as string[],
     cancellable: b.status === "confirmed" && b.start.getTime() - t.getTime() >= DEFAULT_SETTINGS.cancelCutoffHours * 3_600_000,
   });
   const upcoming = all.filter((b) => b.end.getTime() > t.getTime() && b.status === "confirmed").map(toRow);

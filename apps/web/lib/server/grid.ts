@@ -1,7 +1,7 @@
 import type { Db } from "@sunmarke/db";
 import { addDays, cellStatus, timetableForDate } from "@sunmarke/rules";
 import type { Actor } from "./bookings";
-import { listBookings } from "./bookings";
+import { campusOf, listBookings } from "./bookings";
 import { loadWorld } from "./world";
 import { now } from "./util";
 
@@ -34,7 +34,7 @@ export interface GridData {
 
 /** Availability for a date range; every unavailable cell carries its reason. */
 export async function getGrid(db: Db, actor: Actor, from: string, to: string): Promise<GridData> {
-  const world = await loadWorld(db, from, to);
+  const world = await loadWorld(db, from, to, { campusId: campusOf(actor) });
   const bookings = await listBookings(db, { from, to, status: ["confirmed", "completed", "no_show"] });
   const byId = new Map(bookings.map((b) => [b.id, b]));
   const t = now();

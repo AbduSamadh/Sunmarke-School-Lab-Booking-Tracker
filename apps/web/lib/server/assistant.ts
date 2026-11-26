@@ -1,8 +1,8 @@
 import type { Db } from "@sunmarke/db";
-import { addDays, alternatives, evaluate, isoWeekday, localDate, timetableForDate } from "@sunmarke/rules";
+import { addDays, alternatives, evaluate, isoWeekday, localDate, timetableForDate, blockOn } from "@sunmarke/rules";
 import { parseRequest, type ParseContext, type Parsed } from "../shared/assistantParse";
 import { fmtDateLong, fmtDateShort } from "../shared/format";
-import { listBookings, quotaUsage, type Actor } from "./bookings";
+import { campusOf, listBookings, quotaUsage, type Actor } from "./bookings";
 import { getAssignments, getSettings, getStaff, getTimetables, loadWorld } from "./world";
 import { now } from "./util";
 
@@ -50,15 +50,18 @@ export interface AssistantReply {
 /** What the conversation has gathered so far; the browser sends it back with the next message. */
 export type Draft = Omit<Parsed, "intent" | "topic" | "dateText"> & { pending?: "book" | "waitlist" };
 
-const SUGGEST = ["What's free tomorrow?", "Book Quantum next Tuesday P3", "My bookings", "How do I book a double lesson?"];
+const SUGGEST = ["What's free tomorrow?", "Book Quantum next Tuesday P3", "My bookings", "How do AI Carts work?"];
 
-export async function context(db: Db): Promise<ParseContext & { settings: Awaited<ReturnType<typeof getSettings>> }> {
+export async function context(db: Db, campusId?: string): Promise<ParseContext & { settings: Awaited<ReturnType<typeof getSettings>> }> {
   const settings = await getSettings(db);
   const today = localDate(now(), settings);
   const [staff, tts, resources, lookups] = await Promise.all([
     getStaff(db),
-    getTimetables(db),
-    db.query<{ id: string; name: string; type: "room" | "cart_pool" }>("SELECT id, name, type FROM resources WHERE active ORDER BY sort"),
+    getTimetables(db).then((t) => (campusId ? t.filter((x) => x.campusId === campusId) : t)),
+    db.query<{ id: string; name: string; type: "room" | "cart_pool" }>(
+      `SELECT id, name, type FROM resources WHERE active ${campusId ? "AND campus_id = $1" : ""} ORDER BY sort`,
+      campusId ? [campusId] : [],
+    ),
     db.query<{ kind: string; value: string }>("SELECT kind, value FROM lookups ORDER BY kind, sort"),
   ]);
   const std = timetableForDate(tts, today) ?? tts[0];
@@ -66,8 +69,8 @@ export async function context(db: Db): Promise<ParseContext & { settings: Awaite
     settings,
     today,
     resources,
-    incharges: staff.filter((s) => s.active && (s.role === "incharge")).map((s) => ({ id: s.id, name: s.name })),
-    staff: staff.filter((s) => s.active && s.role !== "viewer").map((s) => ({ id: s.id, name: s.name })),
+    incharges: staff.filter((s) => s.active && s.role === "incharge" && (!campusId || s.campusId === campusId)).map((s) => ({ id: s.id, name: s.name })),
+    staff: staff.filter((s) => s.active && s.role !== "viewer" && (!campusId || s.campusId === campusId)).map((s) => ({ id: s.id, name: s.name })),
     subjects: lookups.filter((l) => l.kind === "subject").map((l) => l.value),
     years: lookups.filter((l) => l.kind === "year_group").map((l) => l.value),
     sections: lookups.filter((l) => l.kind === "section").map((l) => l.value),
@@ -88,7 +91,7 @@ export async function ask(db: Db, actor: Actor, message: string, draftIn: Draft 
     });
     if (r) return r;
   }
-  const ctx = await context(db);
+  const ctx = await context(db, campusOf(actor));
   const p = parseRequest(message.slice(0, 500), ctx);
   const target = p.resourceId || p.date || p.blockCodes;
   const details = p.subject || p.yearGroup || p.section || p.studentCount || p.cartCount || p.classroom;
@@ -146,8 +149,8 @@ export function rules(topic: Parsed["topic"], s: Awaited<ReturnType<typeof getSe
   const a: Record<string, string[]> = {
     window: [`You can book from ${s.minLeadHours} hours to ${Math.round(s.maxLeadDays / 7)} weeks ahead. Repeating lessons can be planned up to ${s.recurringMaxDays} days ahead.`],
     cancel: [`Cancel from My bookings up to ${s.cancelCutoffHours} hours before the lesson. After that, contact the in-charge. To change the time, cancel and book again; you can edit the class details any time.`],
-    double: ["Pick the first period, then tick \"Double lesson\" in the booking form. Or ask me: \"Book Quantum Tuesday P3-P4\". Both periods need the same in-charge free."],
-    carts: [`AI Carts come to your classroom. Book 1 to ${s.maxCartsPerBooking} carts in one go and say which room, for example \"Book 4 carts Thursday P2 to Room 2.14\".`],
+    double: ["Double lessons aren't offered: each booking is one period. If you need two, book each period on its own."],
+    carts: [`AI Carts come to your classroom, and each cart comes with its own lab in-charge, so booking carts also takes in-charges away from the labs that period. Book 1 to ${s.maxCartsPerBooking} carts in one go and say which room, for example \"Book 4 carts Thursday P2 to Room 2.14\".`],
     waitlist: [`If a slot is taken, join its waitlist. When it frees up, the first teacher waiting gets it held for ${s.waitlistHoldHours} hours and an email.`],
     incharge: ["Every session needs a lab in-charge: Ram looks after Quantum and the AI Carts, Abdul looks after DollarX, XReal and Strike, and each covers for the other when free. The app picks who is free for you. Only the lab admin can swap them."],
     series: ["Tick \"Repeat this lesson\" in the booking form, choose how often and until when. You see every date first; dates that aren't free are skipped."],
@@ -186,7 +189,7 @@ export async function cancel(db: Db, actor: Actor, d: Draft): Promise<AssistantR
     if (d.resourceId && b.resourceId !== d.resourceId) return false;
     if (d.date && b.date !== d.date) return false;
     if (d.blockCodes) {
-      const codes = b.blockIds.map((id) => timetableForDate(tts, b.date)?.blocks.find((x) => x.id === id)?.code);
+      const codes = b.blockIds.map((id) => blockOn(tts, b.date, id)?.code);
       if (!d.blockCodes.some((c) => codes.includes(c))) return false;
     }
     return true;
@@ -231,7 +234,7 @@ export async function free(db: Db, actor: Actor, ctx: Awaited<ReturnType<typeof 
 }
 
 async function freeSlots(db: Db, actor: Actor, from: string, to: string, d: Draft, limit: number): Promise<SlotCard[]> {
-  const world = await loadWorld(db, from, to);
+  const world = await loadWorld(db, from, to, { campusId: campusOf(actor) });
   const t = now();
   const teacherId = d.forStaffId && actor.role === "admin" ? d.forStaffId : actor.id;
   const out: SlotCard[] = [];
@@ -288,6 +291,13 @@ export async function book(db: Db, actor: Actor, ctx: Awaited<ReturnType<typeof 
     };
   }
   if (isoWeekday(d.date) > 5) return { text: [`${fmtDateLong(d.date)} is a weekend. Which school day?`], draft: { ...keep, date: undefined } };
+  // abd, 25 Nov 2026: no double lessons; one period per booking.
+  if (d.blockCodes.length > 1)
+    return {
+      text: [`Bookings are one period at a time. Shall I book ${d.blockCodes[0]}? Book ${d.blockCodes[1]} separately if you need it.`],
+      draft: { ...keep, blockCodes: [d.blockCodes[0]], double: false },
+      suggestions: [`Book ${d.blockCodes[0]}`],
+    };
 
   const forId = actor.role === "admin" && d.forStaffId && d.forStaffId !== actor.id ? d.forStaffId : undefined;
   const teacherId = forId ?? actor.id;
@@ -308,7 +318,7 @@ export async function book(db: Db, actor: Actor, ctx: Awaited<ReturnType<typeof 
     return { text: [`Nearly there. What's ${ask.join(" and ")}? For example "Science Y8 B, 24 students${isCart ? ", Room 2.14" : ""}".`], draft: keep };
 
   // Ask the rules engine, exactly as the booking form would.
-  const world = await loadWorld(db, d.date, d.date);
+  const world = await loadWorld(db, d.date, d.date, { campusId: campusOf(actor) });
   const tt = timetableForDate(world.timetables, d.date);
   const blocks = (tt?.blocks ?? []).filter((b) => b.bookable).sort((a, b) => a.start.localeCompare(b.start));
   const ids = d.blockCodes.map((c) => blocks.find((b) => b.code.toLowerCase() === c.toLowerCase())?.id);
@@ -378,7 +388,7 @@ export async function book(db: Db, actor: Actor, ctx: Awaited<ReturnType<typeof 
 
 export async function waitlistCard(db: Db, actor: Actor, ctx: Awaited<ReturnType<typeof context>>, d: Draft): Promise<AssistantReply> {
   if (!d.resourceId || !d.date || !d.blockCodes) return { text: ["Which slot? Tell me the lab, day and period, like \"Waitlist Quantum Tuesday P3\"."], draft: { ...d, pending: "waitlist" } };
-  const world = await loadWorld(db, d.date, d.date);
+  const world = await loadWorld(db, d.date, d.date, { campusId: campusOf(actor) });
   const tt = timetableForDate(world.timetables, d.date);
   const block = tt?.blocks.find((b) => b.code === d.blockCodes![0] && b.bookable);
   const res = ctx.resources.find((r) => r.id === d.resourceId)!;

@@ -35,7 +35,7 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
         <div className="lp-copy">
           <p className="eyebrow">Sunmarke School · Innovation labs</p>
           <h1 id="lp-title">
-            Your next lesson, <span className="hl">in the lab.</span>
+            Lab Booking, <span className="hl">made simple.</span>
           </h1>
           <p className="lp-lead">
             Book the {labs.filter((l) => l.type === "room").map((l) => l.name.replace(" Lab", "")).join(", ").replace(/, ([^,]*)$/, " and $1")} labs or a set of AI Carts in a

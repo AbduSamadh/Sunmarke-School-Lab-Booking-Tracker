@@ -2,7 +2,7 @@ import { addDays, isoWeekday, localDate, mondayOf, timetableForDate, type Block 
 import { CalendarClock, CalendarDays, ChevronLeft, ChevronRight, Clock, Plane, Wrench, ArrowRight, ShieldAlert, Users, Ban } from "lucide-react";
 import { requireActor } from "@/lib/server/auth";
 import { getDb } from "@/lib/server/db";
-import { listBookings, type BookingDetail } from "@/lib/server/bookings";
+import { campusOf, listBookings, type BookingDetail } from "@/lib/server/bookings";
 import { getAbsences, getBlackouts, getResources, getSettings, getStaff, getTimetables } from "@/lib/server/world";
 import { listIssues } from "@/lib/server/release11";
 import { IssuesPanel } from "@/components/IssuesPanel";
@@ -32,10 +32,13 @@ export default async function InchargePage({ searchParams }: { searchParams: Pro
   const settings = await getSettings(db);
   const t = now();
   const today = localDate(t, settings);
+  const campus = campusOf(actor);
   const staff = await getStaff(db);
-  const incharges = staff.filter((s) => s.role === "incharge");
+  const incharges = staff.filter((s) => s.role === "incharge" && s.campusId === campus);
+  const resources = (await getResources(db)).filter((r) => r.campusId === campus);
+  const campusRes = new Set(resources.map((r) => r.id));
   const who = actor.role === "incharge" ? actor.id : incharges.some((i) => i.id === sp.who) ? sp.who! : "all";
-  const mine = (b: BookingDetail) => who === "all" || b.inchargeId === who;
+  const mine = (b: BookingDetail) => who === "all" || b.staffIds.includes(who);
 
   // This week (or the week asked for); weekends roll to the next school week.
   const baseMon = mondayOf(isoWeekday(today) > 5 ? addDays(today, 2) : today);
@@ -43,19 +46,18 @@ export default async function InchargePage({ searchParams }: { searchParams: Pro
   const days = [0, 1, 2, 3, 4].map((i) => addDays(mon, i));
   const fetchTo = days[4] > addDays(today, 14) ? days[4] : addDays(today, 14);
   const fetchFrom = mon < today ? mon : today;
-  const all = (await listBookings(db, { from: fetchFrom, to: fetchTo, status: ["confirmed", "completed", "no_show"] })).filter(mine);
+  const all = (await listBookings(db, { from: fetchFrom, to: fetchTo, status: ["confirmed", "completed", "no_show"] })).filter(mine).filter((b) => campusRes.has(b.resourceId));
   const todays = all.filter((b) => b.date === today);
   const next = todays.find((b) => b.end.getTime() > t.getTime() && b.status === "confirmed");
   const week = all.filter((b) => b.date >= days[0] && b.date <= days[4]);
   const upcoming = all.filter((b) => b.date > today).slice(0, 4);
 
-  const resources = await getResources(db);
   const absences = (await getAbsences(db, today, addDays(today, 120)))
     .filter((a) => (actor.role === "admin" ? who === "all" || a.staffId === who : a.staffId === actor.id))
     .sort((a, b) => a.dateFrom.localeCompare(b.dateFrom));
-  const blackouts = (await getBlackouts(db, today, addDays(today, 60))).sort((a, b) => a.dateFrom.localeCompare(b.dateFrom));
-  const issues = await listIssues(db, "open");
-  const timetables = await getTimetables(db);
+  const blackouts = (await getBlackouts(db, today, addDays(today, 60))).filter((b) => b.campusId === campus).sort((a, b) => a.dateFrom.localeCompare(b.dateFrom));
+  const issues = (await listIssues(db, "open")).filter((i) => campusRes.has(i.resource_id));
+  const timetables = (await getTimetables(db)).filter((x) => x.campusId === campus);
   const [leaveMoved, leaveUncovered] = (sp.leave ?? "").split("-").map(Number);
 
   const firstName = actor.role === "incharge" ? actor.name.split(" ")[0] : null;
@@ -130,7 +132,7 @@ export default async function InchargePage({ searchParams }: { searchParams: Pro
                 </div>
               </div>
               <WeekCalendar days={days} today={today} bookings={week} timetables={timetables} blackouts={blackouts} absences={absences} resources={resources} showWho={who === "all"} />
-              <p className="small muted" style={{ marginTop: 8 }}>You also get each day&apos;s list by email at 07:00.</p>
+              <p className="small muted" style={{ marginTop: 8 }}>You also get each day&apos;s list as a Teams message at 07:00.</p>
             </section>
 
             <aside className="ic-side" aria-label="Today">

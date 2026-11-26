@@ -1,6 +1,6 @@
 import type { Db } from "@sunmarke/db";
 import { addDays, blackoutFor, isoWeekday, timetableForDate } from "@sunmarke/rules";
-import { listBookings } from "./bookings";
+import { campusOf, listBookings, type Actor } from "./bookings";
 import { getBlackouts, getResources, getTimetables, getStaff } from "./world";
 
 /**
@@ -12,14 +12,18 @@ export interface ReportFilters {
   from: string;
   to: string;
   resourceId?: string;
+  /** Release 2: one campus, or every campus when unset (group view). */
+  campusId?: string;
   department?: string;
 }
 
 const USED = ["confirmed", "completed", "no_show"] as const;
 
 export async function buildReport(db: Db, f: ReportFilters) {
-  const [timetables, resources, blackouts, staff] = await Promise.all([getTimetables(db), getResources(db), getBlackouts(db, f.from, f.to), getStaff(db)]);
-  let all = await listBookings(db, { from: f.from, to: f.to });
+  const [timetables, allResources, blackouts, staff] = await Promise.all([getTimetables(db), getResources(db), getBlackouts(db, f.from, f.to), getStaff(db)]);
+  const resources = f.campusId ? allResources.filter((r) => r.campusId === f.campusId) : allResources;
+  const resourceIds = new Set(resources.map((r) => r.id));
+  let all = (await listBookings(db, { from: f.from, to: f.to })).filter((b) => resourceIds.has(b.resourceId));
   if (f.resourceId) all = all.filter((b) => b.resourceId === f.resourceId);
   if (f.department) all = all.filter((b) => b.department === f.department);
   const used = all.filter((b) => (USED as readonly string[]).includes(b.status));
@@ -27,13 +31,15 @@ export async function buildReport(db: Db, f: ReportFilters) {
   // Bookable capacity per resource
   const capacity: Record<string, number> = {};
   const blockCodes: string[] = [];
-  for (let d = f.from; d <= f.to; d = addDays(d, 1)) {
-    const tt = timetableForDate(timetables, d);
-    if (!tt) continue;
-    for (const b of tt.blocks.filter((x) => x.bookable)) {
-      if (!blockCodes.includes(b.code)) blockCodes.push(b.code);
-      for (const r of resources) {
-        if (blackoutFor(blackouts, r.id, d, b.code)) continue;
+  // Each lab is measured against its own campus's timetable and blackouts.
+  for (const r of resources) {
+    const own = blackouts.filter((b) => b.resourceId === r.id || (b.resourceId === null && (!b.campusId || b.campusId === r.campusId)));
+    for (let d = f.from; d <= f.to; d = addDays(d, 1)) {
+      const tt = timetableForDate(timetables, d, r.campusId);
+      if (!tt) continue;
+      for (const b of tt.blocks.filter((x) => x.bookable)) {
+        if (!blockCodes.includes(b.code)) blockCodes.push(b.code);
+        if (blackoutFor(own, r.id, d, b.code)) continue;
         capacity[r.id] = (capacity[r.id] ?? 0) + 1;
       }
     }
@@ -50,17 +56,18 @@ export async function buildReport(db: Db, f: ReportFilters) {
       return { id: r.id, name: r.name, type: r.type, colour: r.colour, sessions: mine.length, bookedBlocks: blocks, unitBlocks, bookableBlocks: cap, pct };
     });
 
-  const incharges = staff.filter((s) => used.some((b) => b.inchargeId === s.id));
+  // A cart booking keeps every in-charge who goes with a cart busy, so each counts it.
+  const incharges = staff.filter((s) => used.some((b) => b.staffIds.includes(s.id)));
   const load = incharges.map((s) => {
-    const mine = used.filter((b) => b.inchargeId === s.id);
+    const mine = used.filter((b) => b.staffIds.includes(s.id));
     const cross = mine.filter((b) => b.crossCover).length;
     return { id: s.id, name: s.name, sessions: mine.length, crossCover: cross, crossPct: mine.length ? cross / mine.length : 0 };
   });
 
   // Demand turned away
   const attempts = await db.query<{ code: string; n: number }>(
-    `SELECT code, count(*)::int AS n FROM booking_attempts WHERE date BETWEEN $1 AND $2 ${f.resourceId ? "AND resource_id = $3" : ""} GROUP BY code`,
-    f.resourceId ? [f.from, f.to, f.resourceId] : [f.from, f.to],
+    `SELECT code, count(*)::int AS n FROM booking_attempts WHERE date BETWEEN $1 AND $2 AND resource_id = ANY($3) GROUP BY code`,
+    [f.from, f.to, f.resourceId ? [f.resourceId] : [...resourceIds]],
   );
   const codeN = (c: string) => attempts.find((a) => a.code === c)?.n ?? 0;
   const turnedAway = {
@@ -93,13 +100,13 @@ export async function buildReport(db: Db, f: ReportFilters) {
   // Feedback (R1.1)
   const fb = await db.query<{ resource_id: string; n: number; avg: number }>(
     `SELECT b.resource_id, count(*)::int AS n, avg(f.rating)::float AS avg FROM feedback f JOIN bookings b ON b.id = f.booking_id
-     WHERE b.date BETWEEN $1 AND $2 GROUP BY b.resource_id`,
-    [f.from, f.to],
+     WHERE b.date BETWEEN $1 AND $2 AND b.resource_id = ANY($3) GROUP BY b.resource_id`,
+    [f.from, f.to, [...resourceIds]],
   );
   const issues = await db.query<{ resource_id: string; open: number; total: number }>(
     `SELECT resource_id, count(*) FILTER (WHERE status = 'open')::int AS open, count(*)::int AS total FROM equipment_issues
-     WHERE created_at::date BETWEEN $1::date AND $2::date GROUP BY resource_id`,
-    [f.from, f.to],
+     WHERE created_at::date BETWEEN $1::date AND $2::date AND resource_id = ANY($3) GROUP BY resource_id`,
+    [f.from, f.to, [...resourceIds]],
   );
   const fbCount = fb.reduce((n, r) => n + r.n, 0);
   const feedback = {
@@ -115,9 +122,53 @@ export async function buildReport(db: Db, f: ReportFilters) {
     })),
   };
 
+  // Curriculum coverage (R2): sessions tagged to each KS3 plan level.
+  const levels = await db.query<{ id: string; code: string; strand: string; title: string; year_group: string }>(
+    "SELECT id, code, strand, title, year_group FROM curriculum_levels WHERE active ORDER BY sort, code",
+  );
+  const tagged = used.filter((b) => b.curriculumIds.length > 0);
+  const curriculum = {
+    taggedSessions: tagged.length,
+    levels: levels.map((l) => {
+      const mine = tagged.filter((b) => b.curriculumIds.includes(l.id));
+      return {
+        id: l.id, code: l.code, strand: l.strand, title: l.title, yearGroup: l.year_group,
+        sessions: mine.length,
+        classes: new Set(mine.map((b) => b.classLabel)).size,
+      };
+    }),
+  };
+  const covered = curriculum.levels.filter((l) => l.sessions > 0).length;
+
+  // Teacher-wise (abd, 25 Nov 2026): who uses the labs, how reliably, and what they think.
+  const byTeacherMap = new Map<string, (typeof all)[number][]>();
+  for (const b of all) byTeacherMap.set(b.teacherId, [...(byTeacherMap.get(b.teacherId) ?? []), b]);
+  const byTeacher = [...byTeacherMap.entries()]
+    .map(([id, list]) => {
+      const u = list.filter((b) => (USED as readonly string[]).includes(b.status));
+      const ratings = list.map((b) => b.rating).filter((r): r is number => r !== null);
+      const labs = new Map<string, number>();
+      for (const b of u) labs.set(b.resourceName, (labs.get(b.resourceName) ?? 0) + 1);
+      return {
+        id,
+        name: list[0].teacherName,
+        department: list[0].department,
+        sessions: u.length,
+        attended: list.filter((b) => b.status === "completed").length,
+        noShows: list.filter((b) => b.status === "no_show").length,
+        cancelled: list.filter((b) => b.status === "cancelled").length,
+        cartSessions: u.filter((b) => b.cartCount).length,
+        students: u.reduce((n, b) => n + b.studentCount, 0),
+        labs: [...labs.entries()].sort((a, b) => b[1] - a[1]).map(([name, n]) => `${name} (${n})`).join(", "),
+        avgRating: ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null,
+      };
+    })
+    .sort((a, b) => b.sessions - a.sessions || a.name.localeCompare(b.name));
+
   return {
     filters: f,
     feedback,
+    curriculum: { ...curriculum, covered, total: curriculum.levels.length },
     kpis: {
       sessions: used.length,
       teachers: new Set(used.map((b) => b.teacherId)).size,
@@ -134,6 +185,7 @@ export async function buildReport(db: Db, f: ReportFilters) {
     },
     utilisation,
     load,
+    byTeacher,
     turnedAway,
     heat,
     blockCodes,
@@ -154,4 +206,13 @@ export function toCsv(rows: (string | number | null | undefined)[][]): string {
     return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
   };
   return "﻿" + rows.map((r) => r.map(cell).join(",")).join("\r\n") + "\r\n";
+}
+
+/** Which campus a report covers: group viewers may pick one or "all"; everyone else sees their own. */
+export function reportCampus(actor: Actor, requested?: string | null): string | undefined {
+  if (actor.allCampuses) {
+    if (requested === "all") return undefined;
+    if (requested && /^[\w-]{1,40}$/.test(requested)) return requested;
+  }
+  return campusOf(actor);
 }

@@ -4,6 +4,7 @@ import type { BookingDetail } from "./bookings";
 import { fmtDateLong } from "../shared/format";
 import { DEFAULT_SETTINGS, localDate } from "@sunmarke/rules";
 import { now } from "./util";
+import { sendPush } from "./push";
 
 export type EmailTemplate = "confirmed" | "changed" | "cancelled" | "declined" | "reminder" | "waitlist_offer" | "feedback" | "no_cover";
 
@@ -16,7 +17,7 @@ function rows(b: BookingDetail): [string, string][] {
     ["When", `${fmtDateLong(b.date)}, ${b.blockLabel} (${b.timeLabel})`],
     ["Class", `${b.classLabel} · ${b.subject} · ${b.studentCount} students`],
     ["Teacher", b.teacherName],
-    ["Lab in-charge", b.inchargeName],
+    ["Lab in-charge", b.supportNames.length ? [b.inchargeName, ...b.supportNames].join(", ") : b.inchargeName],
   ];
   if (b.cartCount) r.push(["Carts", `${b.cartCount} to ${b.classroom ?? "classroom"}`]);
   if (b.objective) r.push(["Objective", b.objective]);
@@ -27,7 +28,7 @@ function rows(b: BookingDetail): [string, string][] {
 export async function sendBookingEmail(db: Db, template: EmailTemplate, b: BookingDetail, to: "teacher" | "incharge" | "both", extra: Record<string, string> = {}) {
   const sender = getEmailSender(db);
   const recipients =
-    to === "both" ? [b.teacherEmail, b.inchargeEmail] : to === "teacher" ? [b.teacherEmail] : [extra.inchargeEmail ?? b.inchargeEmail];
+    to === "both" ? [b.teacherEmail, b.inchargeEmail, ...b.supportEmails] : to === "teacher" ? [b.teacherEmail] : [extra.inchargeEmail ?? b.inchargeEmail];
   const short = `${b.resourceName}, ${fmtDateLong(b.date)} ${b.blockLabel}`;
   let subject = "";
   let heading = "";
@@ -42,14 +43,18 @@ export async function sendBookingEmail(db: Db, template: EmailTemplate, b: Booki
     description: `${b.subject} with ${b.teacherName}. Lab in-charge: ${b.inchargeName}.`,
     location: b.cartCount ? (b.classroom ?? "") : b.resourceName,
     organizer: FROM(),
-    attendees: [b.teacherEmail, b.inchargeEmail],
+    attendees: [b.teacherEmail, b.inchargeEmail, ...b.supportEmails],
   };
 
   switch (template) {
     case "confirmed":
       subject = `Booked: ${short}`;
       heading = `${b.resourceName} is booked`;
-      paragraphs.push(`${b.inchargeName} will be with you${b.cartCount ? ` and bring ${b.cartCount} cart${b.cartCount > 1 ? "s" : ""} to ${b.classroom}` : ""}.`);
+      paragraphs.push(
+        b.cartCount
+          ? `${[b.inchargeName, ...b.supportNames].join(", ").replace(/, ([^,]*)$/, " and $1")} will bring ${b.cartCount} cart${b.cartCount > 1 ? "s" : ""} to ${b.classroom}.`
+          : `${b.inchargeName} will be with you.`,
+      );
       action = { label: "View or cancel", url: `${appUrl()}/bookings` };
       ics = buildIcs(icsBase);
       break;
@@ -112,11 +117,18 @@ export async function sendBookingEmail(db: Db, template: EmailTemplate, b: Booki
     const l = await db.query<{ links: { label: string; url: string }[] }>("SELECT links FROM resources WHERE id = $1", [b.resourceId]);
     const links = l[0]?.links ?? [];
     if (links.length) paragraphs.push(`Lesson resources: ${links.map((x) => `${x.label} (${x.url})`).join("; ")}.`);
+    const hub = await db.query<{ hub_url: string }>("SELECT c.hub_url FROM campuses c JOIN resources r ON r.campus_id = c.id WHERE r.id = $1", [b.resourceId]);
+    if (hub[0]?.hub_url) paragraphs.push(`More lesson ideas on the Labs Hub: ${hub[0].hub_url}`);
   }
   const { html, text } = renderEmail({ heading, rows: rows(b), paragraphs, action });
   const list = template === "waitlist_offer" && extra.to ? [extra.to] : recipients;
   for (const addr of [...new Set(list)]) {
-    await sender.send({ bookingId: b.id, template, to: addr, subject, html, text, ics });
+    await sender.send({ bookingId: b.id, template, to: addr, subject, html, text, ics, action });
+    // Release 2: the same news as a phone notification, for anyone signed in to the app.
+    // A failed push never fails (and so never repeats) the email.
+    await sendPush(db, { to: addr, kind: template, title: subject, body: paragraphs[0] ?? heading, bookingId: b.id, url: template === "waitlist_offer" ? `/?date=${b.date}` : "/bookings" }).catch((e) =>
+      console.error("push failed", e instanceof Error ? e.message : e),
+    );
   }
 }
 
@@ -125,7 +137,7 @@ export async function sendAdminAlert(db: Db, subject: string, rowsIn: [string, s
   const { html, text } = renderEmail({ heading: subject, rows: rowsIn, action: { label: "Open admin", url: `${appUrl()}/admin` } });
   const sender = getEmailSender(db);
   for (const to of [...new Set([...admins.map((a) => a.email), ...extraTo])]) {
-    await sender.send({ template: "admin_alert", to, subject: `Action needed: ${subject}`, html, text });
+    await sender.send({ template: "admin_alert", to, subject: `Action needed: ${subject}`, html, text, action: { label: "Open admin", url: `${appUrl()}/admin` } });
   }
 }
 

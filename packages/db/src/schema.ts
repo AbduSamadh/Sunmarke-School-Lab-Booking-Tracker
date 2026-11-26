@@ -6,7 +6,7 @@
  * booking_slots, not by application code alone.
  * Nothing booking-related is hard-deleted: rows are deactivated or status-changed.
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta (key text PRIMARY KEY, value text NOT NULL);
@@ -267,5 +267,64 @@ CREATE TABLE IF NOT EXISTS lookups (
   value text NOT NULL,
   sort int NOT NULL DEFAULT 0,
   PRIMARY KEY (kind, value)
+);
+
+-- Release 2 ------------------------------------------------------------------
+-- Multi-campus: every campus has its own labs, staff, timetables and blackouts.
+CREATE TABLE IF NOT EXISTS campuses (
+  id text PRIMARY KEY,
+  name text NOT NULL,
+  short_name text NOT NULL DEFAULT '',
+  sort int NOT NULL DEFAULT 0,
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO campuses (id, name, short_name) VALUES ('sunmarke', 'Sunmarke School', 'Sunmarke') ON CONFLICT DO NOTHING;
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS campus_id text NOT NULL DEFAULT 'sunmarke' REFERENCES campuses(id);
+ALTER TABLE resources ADD COLUMN IF NOT EXISTS campus_id text NOT NULL DEFAULT 'sunmarke' REFERENCES campuses(id);
+ALTER TABLE timetables ADD COLUMN IF NOT EXISTS campus_id text NOT NULL DEFAULT 'sunmarke' REFERENCES campuses(id);
+ALTER TABLE blackouts ADD COLUMN IF NOT EXISTS campus_id text NOT NULL DEFAULT 'sunmarke' REFERENCES campuses(id);
+-- Group admins (Fortes) see and manage every campus; everyone else sees their own.
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS all_campuses boolean NOT NULL DEFAULT false;
+-- The campus Labs Hub (Google Site): linked in the footer and in confirmation emails.
+ALTER TABLE campuses ADD COLUMN IF NOT EXISTS hub_url text NOT NULL DEFAULT '';
+-- abd, 25 Nov: each AI Cart goes with its own in-charge. The lead is bookings.incharge_id;
+-- the others are here, and every one of them holds its own row in booking_slots.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS support_ids text[] NOT NULL DEFAULT '{}';
+-- abd, 25 Nov: messages go to Teams instead of email.
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS channel text NOT NULL DEFAULT 'email';
+
+-- Curriculum mapping: the KS3 progressive plan, as admin-editable levels.
+CREATE TABLE IF NOT EXISTS curriculum_levels (
+  id text PRIMARY KEY,
+  code text NOT NULL UNIQUE,
+  strand text NOT NULL,
+  title text NOT NULL,
+  year_group text NOT NULL DEFAULT '',
+  sort int NOT NULL DEFAULT 0,
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS curriculum_ids text[] NOT NULL DEFAULT '{}';
+
+-- Release 2.1: weekly timetabled lessons in hybrid labs (Strike, XReal, DollarX host regular ICT lessons).
+CREATE TABLE IF NOT EXISTS timetabled_lessons (
+  id text PRIMARY KEY,
+  resource_id text NOT NULL REFERENCES resources(id),
+  weekday int NOT NULL CHECK (weekday BETWEEN 1 AND 7),
+  block_code text NOT NULL,
+  label text NOT NULL,
+  active boolean NOT NULL DEFAULT true
+);
+CREATE UNIQUE INDEX IF NOT EXISTS timetabled_lessons_slot ON timetabled_lessons (resource_id, weekday, block_code) WHERE active;
+
+-- Phone app: device tokens for push notifications (Expo push tokens).
+CREATE TABLE IF NOT EXISTS push_devices (
+  token text PRIMARY KEY,
+  staff_id text NOT NULL REFERENCES staff(id),
+  platform text NOT NULL CHECK (platform IN ('ios','android','web')),
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  last_seen_at timestamptz NOT NULL DEFAULT now()
 );
 `;

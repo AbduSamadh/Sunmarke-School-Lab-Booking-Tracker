@@ -10,7 +10,7 @@ const ITEMS: { href: string; label: string; icon: typeof CalendarDays; roles: Ro
   { href: "/incharge", label: "Today", icon: Clock, roles: ["incharge", "admin"] },
   { href: "/reports", label: "Reports", icon: BarChart3, roles: ["admin", "viewer"] },
   { href: "/admin", label: "Admin", icon: Settings, roles: ["admin"] },
-  { href: "/outbox", label: "Email outbox", icon: Inbox, roles: ["admin", "incharge"] },
+  { href: "/outbox", label: "Messages", icon: Inbox, roles: ["admin", "incharge"] },
 ];
 
 export function Nav({ role }: { role: Role }) {

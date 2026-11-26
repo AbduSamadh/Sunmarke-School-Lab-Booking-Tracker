@@ -1,5 +1,6 @@
 import type { Db, Tx } from "@sunmarke/db";
 import {
+  type TimetabledLesson,
   DEFAULT_SETTINGS,
   type Blackout,
   type BusyInterval,
@@ -13,6 +14,7 @@ import {
   type Absence,
   localToInstant,
   addDays,
+  scopeToCampus,
 } from "@sunmarke/rules";
 import { getCalendar } from "./calendar";
 
@@ -25,6 +27,8 @@ export interface StaffRow {
   department: string;
   role: "teacher" | "incharge" | "admin" | "viewer";
   active: boolean;
+  campusId: string;
+  allCampuses: boolean;
 }
 
 export async function getSettings(db: Q): Promise<RuleSettings & { mockCalendarDown: boolean }> {
@@ -38,8 +42,8 @@ export async function getSettings(db: Q): Promise<RuleSettings & { mockCalendarD
 }
 
 export async function getTimetables(db: Q): Promise<Timetable[]> {
-  const tts = await db.query<{ id: string; name: string; valid_from: string | null; valid_to: string | null; weekdays: number[]; priority: number }>(
-    "SELECT id, name, valid_from, valid_to, weekdays, priority FROM timetables WHERE active ORDER BY priority, name",
+  const tts = await db.query<{ id: string; name: string; valid_from: string | null; valid_to: string | null; weekdays: number[]; priority: number; campus_id: string }>(
+    "SELECT id, name, valid_from, valid_to, weekdays, priority, campus_id FROM timetables WHERE active ORDER BY priority, name",
   );
   const blocks = await db.query<{ id: string; timetable_id: string; code: string; start_time: string; end_time: string; bookable: boolean }>(
     "SELECT * FROM blocks ORDER BY start_time",
@@ -51,6 +55,7 @@ export async function getTimetables(db: Q): Promise<Timetable[]> {
     validTo: t.valid_to,
     weekdays: t.weekdays,
     priority: t.priority,
+    campusId: t.campus_id,
     blocks: blocks
       .filter((b) => b.timetable_id === t.id)
       .map((b) => ({ id: b.id, code: b.code, start: b.start_time, end: b.end_time, bookable: b.bookable })),
@@ -62,15 +67,15 @@ export interface ResourceLink {
   url: string;
 }
 
-export async function getResources(db: Q): Promise<(Resource & { location: string; colour: string; capacity: number | null; links: ResourceLink[]; checkinCode: string | null })[]> {
-  const rows = await db.query<{ id: string; name: string; type: "room" | "cart_pool"; units: number; active: boolean; location: string; colour: string; capacity: number | null; links: ResourceLink[]; checkinCode: string | null }>(
-    "SELECT id, name, type, units, active, location, colour, capacity, links, checkin_code AS \"checkinCode\" FROM resources ORDER BY sort, name",
+export async function getResources(db: Q): Promise<(Resource & { location: string; colour: string; capacity: number | null; links: ResourceLink[]; checkinCode: string | null; campusId: string })[]> {
+  const rows = await db.query<{ id: string; name: string; type: "room" | "cart_pool"; units: number; active: boolean; location: string; colour: string; capacity: number | null; links: ResourceLink[]; checkinCode: string | null; campusId: string }>(
+    "SELECT id, name, type, units, active, location, colour, capacity, links, checkin_code AS \"checkinCode\", campus_id AS \"campusId\" FROM resources ORDER BY sort, name",
   );
   return rows;
 }
 
 export async function getStaff(db: Q): Promise<StaffRow[]> {
-  return db.query<StaffRow>("SELECT id, name, email, department, role, active FROM staff ORDER BY name");
+  return db.query<StaffRow>("SELECT id, name, email, department, role, active, campus_id AS \"campusId\", all_campuses AS \"allCampuses\" FROM staff ORDER BY name");
 }
 
 export async function getAssignments(db: Q): Promise<InchargeAssignment[]> {
@@ -86,12 +91,19 @@ export async function getHolds(db: Q, from: string, to: string): Promise<SlotHol
   return rows.map((r) => ({ bookingId: r.booking_id, resourceId: r.resource_id, inchargeId: r.incharge_id, date: r.date, blockId: r.block_id, units: r.units }));
 }
 
+export async function getLessons(db: Q): Promise<TimetabledLesson[]> {
+  const rows = await db.query<{ id: string; resource_id: string; weekday: number; block_code: string; label: string }>(
+    "SELECT id, resource_id, weekday, block_code, label FROM timetabled_lessons WHERE active ORDER BY weekday, block_code",
+  );
+  return rows.map((r) => ({ id: r.id, resourceId: r.resource_id, weekday: r.weekday, blockCode: r.block_code, label: r.label }));
+}
+
 export async function getBlackouts(db: Q, from: string, to: string): Promise<Blackout[]> {
-  const rows = await db.query<{ id: string; resource_id: string | null; date_from: string; date_to: string; block_codes: string[] | null; reason: Blackout["reason"]; note: string }>(
-    "SELECT id, resource_id, date_from, date_to, block_codes, reason, note FROM blackouts WHERE active AND date_from <= $2 AND date_to >= $1",
+  const rows = await db.query<{ id: string; resource_id: string | null; date_from: string; date_to: string; block_codes: string[] | null; reason: Blackout["reason"]; note: string; campus_id: string }>(
+    "SELECT id, resource_id, date_from, date_to, block_codes, reason, note, campus_id FROM blackouts WHERE active AND date_from <= $2 AND date_to >= $1",
     [from, to],
   );
-  return rows.map((r) => ({ id: r.id, resourceId: r.resource_id, dateFrom: r.date_from, dateTo: r.date_to, blockCodes: r.block_codes, reason: r.reason, note: r.note || undefined }));
+  return rows.map((r) => ({ id: r.id, resourceId: r.resource_id, dateFrom: r.date_from, dateTo: r.date_to, blockCodes: r.block_codes, reason: r.reason, note: r.note || undefined, campusId: r.campus_id }));
 }
 
 export async function getOffers(db: Q, from: string, to: string): Promise<WaitlistOffer[]> {
@@ -123,9 +135,9 @@ export interface LoadedWorld extends WorldState {
  * If the calendar API is down, bookings still work on app data alone (T17) and the
  * caller is told the calendar was not checked.
  */
-export async function loadWorld(db: Db, from: string, to: string, opts: { tx?: Tx; skipCalendar?: boolean } = {}): Promise<LoadedWorld> {
+export async function loadWorld(db: Db, from: string, to: string, opts: { tx?: Tx; skipCalendar?: boolean; campusId?: string } = {}): Promise<LoadedWorld> {
   const q: Q = opts.tx ?? db;
-  const [settings, timetables, resourceRows, assignments, staffRows, holds, blackouts, offers, absences] = await Promise.all([
+  const [settings, timetables, resourceRows, assignments, staffRows, holds, blackouts, offers, absences, lessons] = await Promise.all([
     getSettings(q),
     getTimetables(q),
     getResources(q),
@@ -135,6 +147,7 @@ export async function loadWorld(db: Db, from: string, to: string, opts: { tx?: T
     getBlackouts(q, from, to),
     getOffers(q, from, to),
     getAbsences(q, from, to),
+    getLessons(q),
   ]);
   const inchargeIds = [...new Set(assignments.map((a) => a.staffId))];
   const incharges = staffRows.filter((s) => inchargeIds.includes(s.id));
@@ -153,7 +166,7 @@ export async function loadWorld(db: Db, from: string, to: string, opts: { tx?: T
       calendarError = e instanceof Error ? e.message : String(e);
     }
   }
-  return {
+  const world: LoadedWorld = {
     timetables,
     resources: resourceRows,
     resourceRows,
@@ -166,7 +179,12 @@ export async function loadWorld(db: Db, from: string, to: string, opts: { tx?: T
     settings,
     offers,
     absences,
+    lessons,
     calendarChecked,
     calendarError,
   };
+  if (!opts.campusId) return world;
+  // Release 2: one campus's labs, timetables and blackouts (staff stay complete for names).
+  const scoped = scopeToCampus(world, opts.campusId);
+  return { ...world, ...scoped, resourceRows: resourceRows.filter((r) => r.campusId === opts.campusId) };
 }

@@ -9,8 +9,7 @@ import {
   type Alternative,
   type Block,
   type BlockedCode,
-  weekRange,
-} from "@sunmarke/rules";
+  weekRange, blockOn } from "@sunmarke/rules";
 import type { BookingInput, BookingPatch } from "../shared/schemas";
 import { audit } from "./audit";
 import { enqueue, runJobs } from "./jobs";
@@ -24,6 +23,17 @@ export interface Actor {
   email: string;
   role: "teacher" | "incharge" | "admin" | "viewer";
   department: string;
+  /** Release 2: the campus this person is working in now (their own, or the one a group admin picked). Unset = the default campus. */
+  campusId?: string;
+  /** The campus they belong to. */
+  homeCampusId?: string;
+  /** Group admins and leadership who may switch between campuses. */
+  allCampuses?: boolean;
+}
+
+export const DEFAULT_CAMPUS = "sunmarke";
+export function campusOf(actor: Pick<Actor, "campusId">): string {
+  return actor.campusId ?? DEFAULT_CAMPUS;
 }
 
 export class AppError extends Error {
@@ -70,6 +80,14 @@ export interface BookingDetail {
   recurrenceId: string | null;
   checkedInAt: Date | null;
   rating: number | null;
+  /** Release 2: KS3 progressive plan levels this lesson covers. */
+  curriculumIds: string[];
+  /** AI Carts: the other in-charges going with the carts (one per cart, lead excluded). */
+  supportIds: string[];
+  supportNames: string[];
+  supportEmails: string[];
+  /** Lead plus support: everyone this booking keeps busy. */
+  staffIds: string[];
 }
 
 type Row = {
@@ -77,14 +95,17 @@ type Row = {
   teacher_id: string; teacher_name: string; teacher_email: string; department: string; incharge_id: string; incharge_name: string; incharge_email: string;
   cross_cover: boolean; subject: string; year_group: string; section: string; student_count: number; cart_count: number | null; classroom: string | null;
   objective: string; lesson_plan_url: string | null; special_requirements: string; status: BookingStatus; status_reason: string | null; created_at: Date;
-  recurrence_id: string | null; checked_in_at: Date | null; rating: number | null;
+  recurrence_id: string | null; checked_in_at: Date | null; rating: number | null; curriculum_ids: string[] | null;
+  support_ids: string[] | null; support_names: string[] | null; support_emails: string[] | null;
 };
 
 const SELECT = `
 SELECT b.*, r.name AS resource_name, r.type AS resource_type, r.colour,
   t.name AS teacher_name, t.email AS teacher_email, t.department,
   i.name AS incharge_name, i.email AS incharge_email,
-  (SELECT f.rating FROM feedback f WHERE f.booking_id = b.id) AS rating
+  (SELECT f.rating FROM feedback f WHERE f.booking_id = b.id) AS rating,
+  ARRAY(SELECT s.name FROM unnest(b.support_ids) WITH ORDINALITY u(id, n) JOIN staff s ON s.id = u.id ORDER BY u.n) AS support_names,
+  ARRAY(SELECT s.email FROM unnest(b.support_ids) WITH ORDINALITY u(id, n) JOIN staff s ON s.id = u.id ORDER BY u.n) AS support_emails
 FROM bookings b
 JOIN resources r ON r.id = b.resource_id
 JOIN staff t ON t.id = b.teacher_id
@@ -138,6 +159,11 @@ async function toDetails(db: Db, rows: Row[]): Promise<BookingDetail[]> {
       recurrenceId: r.recurrence_id ?? null,
       checkedInAt: r.checked_in_at ? new Date(r.checked_in_at) : null,
       rating: r.rating ?? null,
+      curriculumIds: r.curriculum_ids ?? [],
+      supportIds: r.support_ids ?? [],
+      supportNames: r.support_names ?? [],
+      supportEmails: r.support_emails ?? [],
+      staffIds: [r.incharge_id, ...(r.support_ids ?? [])],
     };
   });
 }
@@ -196,9 +222,18 @@ export async function createBooking(
     usage: override ? undefined : await quotaUsage(db, teacherId, input.date),
   };
 
+  const curriculumIds = await checkCurriculum(db, input.curriculumIds);
+
   // Live check with fresh calendar free/busy (R2).
   const world = await loadWorld(db, input.date, input.date);
-  const resource = world.resources.find((r) => r.id === input.resourceId);
+  const resource = world.resourceRows.find((r) => r.id === input.resourceId);
+  // Release 2: teachers book labs on their own campus; a group admin may book anywhere for themselves.
+  if (resource) {
+    const home = await db.query<{ campus_id: string }>("SELECT campus_id FROM staff WHERE id = $1", [teacherId]);
+    const sameCampus = home[0]?.campus_id === resource.campusId;
+    if (!sameCampus && !(actor.allCampuses && teacherId === actor.id))
+      throw new AppError(403, "other_campus", "This lab belongs to another campus.");
+  }
   if (resource?.type === "cart_pool") {
     if (!input.cartCount) throw new AppError(422, "invalid", "Say how many carts you need.");
     if (!input.classroom) throw new AppError(422, "invalid", "Say which classroom the carts go to.");
@@ -221,21 +256,24 @@ export async function createBooking(
       if (!ev.ok) throw new JustTaken(ev.reason);
       await tx.query(
         `INSERT INTO bookings (id, resource_id, date, block_ids, teacher_id, incharge_id, subject, year_group, section, student_count,
-          cart_count, classroom, objective, lesson_plan_url, special_requirements, status, cross_cover, created_by, created_at, updated_at, recurrence_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'confirmed',$16,$17,$18,$18,$19)`,
+          cart_count, classroom, objective, lesson_plan_url, special_requirements, status, cross_cover, created_by, created_at, updated_at, recurrence_id, curriculum_ids, support_ids)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'confirmed',$16,$17,$18,$18,$19,$20,$21)`,
         [
           id, input.resourceId, input.date, input.blockIds, teacherId, ev.inchargeId, input.subject, input.yearGroup, input.section,
           input.studentCount, resource?.type === "cart_pool" ? input.cartCount : null, resource?.type === "cart_pool" ? input.classroom : null,
-          input.objective, input.lessonPlanUrl || null, input.specialRequirements, ev.crossCover, actor.id, t.toISOString(), opts.recurrenceId ?? null,
+          input.objective, input.lessonPlanUrl || null, input.specialRequirements, ev.crossCover, actor.id, t.toISOString(), opts.recurrenceId ?? null, curriculumIds,
+          ev.inchargeIds.slice(1),
         ],
       );
-      for (const blockId of input.blockIds) {
-        await tx.query(
-          "INSERT INTO booking_slots (booking_id, incharge_id, resource_id, room_key, date, block_id, units) VALUES ($1,$2,$3,$4,$5,$6,$7)",
-          [id, ev.inchargeId, input.resourceId, resource?.type === "room" ? input.resourceId : null, input.date, blockId, resource?.type === "cart_pool" ? input.cartCount : 1],
-        );
-      }
-      await audit(tx, { actorId: actor.id, action: override ? "booking.create.override" : "booking.create", entity: "booking", entityId: id, after: { ...input, inchargeId: ev.inchargeId } });
+      // One slot per in-charge per block: a cart booking holds one cart and one in-charge per row,
+      // so the unique index on (incharge, date, block) keeps every in-charge in one place.
+      for (const blockId of input.blockIds)
+        for (const who of ev.inchargeIds)
+          await tx.query(
+            "INSERT INTO booking_slots (booking_id, incharge_id, resource_id, room_key, date, block_id, units) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+            [id, who, input.resourceId, resource?.type === "room" ? input.resourceId : null, input.date, blockId, 1],
+          );
+      await audit(tx, { actorId: actor.id, action: override ? "booking.create.override" : "booking.create", entity: "booking", entityId: id, after: { ...input, inchargeIds: ev.inchargeIds } });
       await tx.query("UPDATE waitlist SET status = 'booked' WHERE teacher_id = $1 AND resource_id = $2 AND date = $3 AND block_id = ANY($4) AND status IN ('waiting','offered')", [
         teacherId, input.resourceId, input.date, input.blockIds,
       ]);
@@ -273,7 +311,7 @@ async function loadForChange(db: Db, actor: Actor, id: string, allow: "owner" | 
   const b = await getBookingDetail(db, id);
   if (!b) throw new AppError(404, "not_found", "Booking not found.");
   const isOwner = b.teacherId === actor.id;
-  const isIncharge = b.inchargeId === actor.id || actor.role === "incharge";
+  const isIncharge = b.staffIds.includes(actor.id) || actor.role === "incharge";
   const ok = actor.role === "admin" || (allow === "owner" ? isOwner : isIncharge && actor.role !== "teacher");
   if (!ok) {
     await audit(db, { actorId: actor.id, action: "authz.denied", entity: "booking", entityId: id, after: { allow } });
@@ -348,7 +386,7 @@ export async function cancelBooking(db: Db, actor: Actor, id: string, opts: { un
   const t = now();
   const settings = await getSettings(db);
   const tts = await getTimetables(db);
-  const first = timetableForDate(tts, b.date)?.blocks.find((x) => x.id === b.blockIds[0]);
+  const first = blockOn(tts, b.date, b.blockIds[0]);
   const isUndo = opts.undo === true && t.getTime() - b.createdAt.getTime() < 15_000;
   if (actor.role !== "admin" && !isUndo && first && !canCancel(b.date, first, t, settings))
     throw new AppError(409, "too_late", `Bookings can be cancelled up to ${settings.cancelCutoffHours} h before. Contact the lab in-charge.`);
@@ -377,13 +415,23 @@ export async function declineBooking(db: Db, actor: Actor, id: string, reason: s
   return getBookingDetail(db, id);
 }
 
+/** Release 2: only active KS3 plan levels can be tagged. Returns the de-duplicated ids. */
+export async function checkCurriculum(db: Db, ids: string[] | undefined): Promise<string[]> {
+  const want = [...new Set(ids ?? [])];
+  if (want.length === 0) return [];
+  const ok = await db.query<{ id: string }>("SELECT id FROM curriculum_levels WHERE active AND id = ANY($1)", [want]);
+  if (ok.length !== want.length) throw new AppError(422, "invalid", "One of the curriculum levels is no longer in the plan. Pick again.");
+  return want;
+}
+
 export async function updateBooking(db: Db, actor: Actor, id: string, patch: BookingPatch) {
   const b = await loadForChange(db, actor, id, "owner");
   if (b.status !== "confirmed") throw new AppError(409, "not_active", "This booking is not active.");
   const map: Record<keyof BookingPatch, string> = {
     subject: "subject", yearGroup: "year_group", section: "section", studentCount: "student_count", classroom: "classroom",
-    objective: "objective", lessonPlanUrl: "lesson_plan_url", specialRequirements: "special_requirements",
+    objective: "objective", lessonPlanUrl: "lesson_plan_url", specialRequirements: "special_requirements", curriculumIds: "curriculum_ids",
   };
+  if (patch.curriculumIds) patch = { ...patch, curriculumIds: await checkCurriculum(db, patch.curriculumIds) };
   const sets: string[] = [];
   const p: unknown[] = [id];
   const changed: string[] = [];

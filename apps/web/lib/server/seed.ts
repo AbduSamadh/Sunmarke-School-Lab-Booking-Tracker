@@ -14,7 +14,14 @@ const STAFF = [
   ["abd", "Abd", "abd@sunmarke.example", "Labs", "admin"],
   ["ram", "Ram", "ram@sunmarke.example", "Labs", "incharge"],
   ["abdul", "Abdul", "abdul@sunmarke.example", "Labs", "incharge"],
+  // abd, 25 Nov 2026: Nael is the third lab in-charge.
+  ["nael", "Nael", "nael@sunmarke.example", "Labs", "incharge"],
   ["neil", "Dr. Neil", "neil@sunmarke.example", "Leadership", "viewer"],
+  // abd, 25 Nov 2026: leadership sign-ins for SLT (Dr. Sreejit), the Principal and the Board of Directors.
+  // The Principal and BOD names are placeholders until the real staff list arrives.
+  ["sreejit", "Dr. Sreejit", "sreejit@sunmarke.example", "SLT", "viewer"],
+  ["principal", "Principal", "principal@sunmarke.example", "Principal", "viewer"],
+  ["bod", "Board of Directors", "bod@sunmarke.example", "BOD", "viewer"],
   ["t-sara", "Sara Khan", "sara.khan@sunmarke.example", "Science", "teacher"],
   ["t-omar", "Omar Haddad", "omar.haddad@sunmarke.example", "Computing", "teacher"],
   ["t-priya", "Priya Nair", "priya.nair@sunmarke.example", "Primary", "teacher"],
@@ -31,19 +38,69 @@ const RESOURCES = [
   ["strike", "Strike Lab", "room", 1, "Senior block", 28, "strike", 5],
 ] as const;
 
-const SUBJECTS = ["Science", "Physics", "Chemistry", "Biology", "Computing", "Maths", "English", "Design & Technology", "Art", "Music", "Geography", "History", "Arabic", "Islamic Studies", "French", "Business", "PE"];
+/**
+ * Booking subjects, matched to the KS3 curriculum (abd, 25 Nov 2026): the national curriculum
+ * subjects for Y7 to Y9 plus the UAE's required Arabic, Islamic Studies and Moral, Social and
+ * Cultural Studies. Science is one subject at KS3, so Physics, Chemistry and Biology are not
+ * listed, and Business (a GCSE option) is dropped. "Other" asks the teacher to name it.
+ */
+export const SUBJECTS = ["Computing", "Science", "Maths", "English", "Design & Technology", "Art & Design", "Music", "Geography", "History", "Languages", "Citizenship", "PE", "Arabic", "Islamic Studies", "Moral, Social & Cultural Studies", "Other"];
 const YEARS = ["FS1", "FS2", ...Array.from({ length: 13 }, (_, i) => `Y${i + 1}`)];
 const SECTIONS = ["A", "B", "C", "D", "E", "F"];
+
+/**
+ * SAMPLE KS3 levels so curriculum mapping can be tried, checked against the KS3 Computing
+ * programme of study (England, Y7 to Y9) on 25 Nov 2026 at abd's request: every level is a
+ * statement from that programme, spread across the three years. The national curriculum does
+ * not split KS3 by year, so the year is a suggested order. They are placeholders, not
+ * Sunmarke's KS3 progressive plan: the lab admin replaces them in Admin › Curriculum (or
+ * imports the real plan as CSV) before tagging real lessons.
+ */
+export const SAMPLE_CURRICULUM: [code: string, strand: string, title: string, year: string][] = [
+  ["CT-7", "Algorithms and computational thinking", "Use abstraction and decomposition to model a real-world problem", "Y7"],
+  ["PR-7", "Programming", "Write programs that use sequence, selection and repetition", "Y7"],
+  ["SY-7", "Computer systems and data", "Name the hardware and software parts of a computer system and how they communicate", "Y7"],
+  ["ES-7", "Online safety", "Keep your identity and privacy safe online, and know how to report concerns", "Y7"],
+  ["CT-8", "Algorithms and computational thinking", "Compare searching and sorting algorithms", "Y8"],
+  ["PR-8", "Programming", "Use a text-based language with lists and procedures to solve a problem", "Y8"],
+  ["SY-8", "Computer systems and data", "Represent numbers, text, images and sound in binary, and add binary numbers", "Y8"],
+  ["IT-8", "Creative projects", "Combine applications and devices to collect and analyse data for a user", "Y8"],
+  ["CT-9", "Algorithms and computational thinking", "Use logical reasoning to compare two algorithms for the same task", "Y9"],
+  ["PR-9", "Programming", "Write and test functions in two languages, at least one text-based", "Y9"],
+  ["SY-9", "Computer systems and data", "Use Boolean logic in circuits and programs, and explain how instructions are stored and run", "Y9"],
+  ["IT-9", "Creative projects", "Create and improve a digital product for an audience: trustworthy, well designed and usable", "Y9"],
+];
+
+/**
+ * DUMMY weekly ICT timetable for the hybrid labs (abd, 25 Nov 2026): Strike, XReal and
+ * DollarX host regular ICT lessons, so only the other periods can be booked. Replace with
+ * the school's real ICT timetable. Weekday 1 = Monday.
+ */
+const ICT_PERIODS: Record<string, Record<number, string[]>> = {
+  strike: { 1: ["P1", "P2", "P5"], 2: ["P1", "P2", "P6"], 3: ["P3", "P4", "P7"], 4: ["P2", "P3", "P6"], 5: ["P1", "P4"] },
+  xreal: { 1: ["P3", "P4", "P7"], 2: ["P3", "P5", "P7"], 3: ["P1", "P5", "P6"], 4: ["P1", "P4", "P7"], 5: ["P2", "P5"] },
+  dollarx: { 1: ["P2", "P6"], 2: ["P2", "P3", "P7"], 3: ["P4", "P5"], 4: ["P3", "P6", "P7"], 5: ["P1", "P3", "P6"] },
+};
+export const ICT_LESSONS: { id: string; resourceId: string; weekday: number; blockCode: string; label: string }[] = Object.entries(ICT_PERIODS).flatMap(([resourceId, days], li) =>
+  Object.entries(days).flatMap(([wd, codes]) =>
+    codes.map((blockCode, i) => {
+      const n = li * 7 + Number(wd) * 3 + i;
+      return { id: `ict-${resourceId}-${wd}-${blockCode}`, resourceId, weekday: Number(wd), blockCode, label: `ICT Y${7 + (n % 5)} ${"ABCD"[n % 4]}` };
+    }),
+  ),
+);
 
 export async function seed(db: Db) {
   for (const s of STAFF)
     await db.query("INSERT INTO staff (id, name, email, department, role) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", [...s]);
   for (const r of RESOURCES)
     await db.query("INSERT INTO resources (id, name, type, units, location, capacity, colour, sort) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING", [...r]);
-  for (const [res, primary, fallback] of [
-    ["quantum", "ram", "abdul"], ["carts", "ram", "abdul"], ["dollarx", "abdul", "ram"], ["xreal", "abdul", "ram"], ["strike", "abdul", "ram"],
+  // abd, 25 Nov 2026: Nael works Quantum and the AI Carts with Ram (Ram, then Nael, then Abdul);
+  // for DollarX, XReal and Strike he steps in when Abdul and Ram are both busy.
+  for (const [res, ...order] of [
+    ["quantum", "ram", "nael", "abdul"], ["carts", "ram", "nael", "abdul"], ["dollarx", "abdul", "ram", "nael"], ["xreal", "abdul", "ram", "nael"], ["strike", "abdul", "ram", "nael"],
   ]) {
-    await db.query("INSERT INTO incharge_assignments VALUES ($1,$2,1),($1,$3,2) ON CONFLICT DO NOTHING", [res, primary, fallback]);
+    for (const [i, who] of order.entries()) await db.query("INSERT INTO incharge_assignments VALUES ($1,$2,$3) ON CONFLICT DO NOTHING", [res, who, i + 1]);
   }
   const tt = standardTimetable();
   await db.query("INSERT INTO timetables (id, name, valid_from, valid_to, weekdays, priority) VALUES ($1,$2,NULL,NULL,$3,0) ON CONFLICT DO NOTHING", [tt.id, tt.name, tt.weekdays]);
@@ -53,6 +110,14 @@ export async function seed(db: Db) {
   await db.query("INSERT INTO settings VALUES ('mock_calendar_down', 'false') ON CONFLICT DO NOTHING");
   for (const [kind, list] of [["subject", SUBJECTS], ["year_group", YEARS], ["section", SECTIONS]] as const)
     for (const [i, v] of list.entries()) await db.query("INSERT INTO lookups VALUES ($1,$2,$3) ON CONFLICT DO NOTHING", [kind, v, i]);
+
+  for (const [i, [code, strand, title, year]] of SAMPLE_CURRICULUM.entries())
+    await db.query("INSERT INTO curriculum_levels (id, code, strand, title, year_group, sort) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING", [`cl-${code.toLowerCase()}`, code, strand, title, year, i]);
+  await db.query("INSERT INTO meta VALUES ('curriculum_sample', 'true') ON CONFLICT DO NOTHING");
+  // Abd (lab admin) and Dr. Neil (leadership) can see every campus once there is more than one.
+  await db.query("UPDATE staff SET all_campuses = true WHERE id IN ('abd', 'neil', 'sreejit', 'principal', 'bod')");
+  for (const l of ICT_LESSONS)
+    await db.query("INSERT INTO timetabled_lessons (id, resource_id, weekday, block_code, label) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", [l.id, l.resourceId, l.weekday, l.blockCode, l.label]);
 
   await seedHistory(db);
   await seedUpcoming(db);
@@ -68,7 +133,7 @@ async function seedUpcoming(db: Db) {
   const base = { section: "", objective: "", specialRequirements: "", overrideWindow: true };
   const plan: [string, string, string, string, Partial<Parameters<typeof createBooking>[2]>][] = [
     [addDays(mon, 1), "P3", "quantum", "t-sara", { subject: "Science", yearGroup: "Y8", section: "B", studentCount: 24, objective: "Build and test a simple circuit" }],
-    [addDays(mon, 1), "P3", "carts", "t-priya", { subject: "Computing", yearGroup: "Y5", section: "C", studentCount: 26, cartCount: 4, classroom: "Room 2.14", objective: "Intro to block coding" }],
+    [addDays(mon, 1), "P3", "carts", "t-priya", { subject: "Computing", yearGroup: "Y5", section: "C", studentCount: 26, cartCount: 2, classroom: "Room 2.14", objective: "Intro to block coding" }],
     [addDays(mon, 2), "P2", "xreal", "t-omar", { subject: "Computing", yearGroup: "Y10", section: "A", studentCount: 20, objective: "VR field trip: the solar system" }],
     [addDays(mon, 3), "P1", "dollarx", "t-lucy", { subject: "Maths", yearGroup: "Y9", section: "D", studentCount: 25, objective: "Budgeting simulation" }],
     [addDays(mon, 3), "P5", "strike", "t-james", { subject: "Design & Technology", yearGroup: "Y11", section: "A", studentCount: 18, objective: "Prototype testing" }],
@@ -84,10 +149,32 @@ async function seedUpcoming(db: Db) {
   // Today's sessions for the in-charge view, where the block has not started yet.
   if (isoWeekday(today) <= 5) {
     for (const [block, resourceId, teacher, extra] of [
-      ["P6", "quantum", "t-sara", { subject: "Physics", yearGroup: "Y7", section: "A", studentCount: 22 }],
+      ["P6", "quantum", "t-sara", { subject: "Science", yearGroup: "Y7", section: "A", studentCount: 22 }],
       ["P7", "carts", "t-mariam", { subject: "Geography", yearGroup: "Y6", section: "B", studentCount: 25, cartCount: 3, classroom: "Room 1.08" }],
     ] as const) {
       await createBooking(db, admin, { ...base, resourceId, date: today, blockIds: [P(block)], ...extra } as Parameters<typeof createBooking>[2], { onBehalfOf: teacher }).catch(() => undefined);
+    }
+  }
+  // Today's earlier sessions, already started, so the in-charge view can show attendance at any time of day.
+  if (isoWeekday(today) <= 5) {
+    const world = await loadWorld(db, today, today, { skipCalendar: true });
+    const fakeNow = localToInstant(addDays(today, -2), "08:00", DEFAULT_SETTINGS);
+    for (const [block, resourceId, teacher, subject, year, section, n, carts] of [
+      ["P1", "quantum", "t-omar", "Computing", "Y9", "A", 23, null],
+      ["P2", "carts", "t-lucy", "Maths", "Y7", "C", 25, 1],
+    ] as const) {
+      const ev = evaluate(world, { resourceId, date: today, blockIds: [P(block)], units: carts ?? 1, now: fakeNow });
+      if (!ev.ok) continue;
+      const id = newId("bk");
+      await db.query(
+        `INSERT INTO bookings (id, resource_id, date, block_ids, teacher_id, incharge_id, subject, year_group, section, student_count, cart_count, classroom, status, cross_cover, created_by, created_at, support_ids)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'confirmed',$13,$5,$14,$15)`,
+        [id, resourceId, today, [P(block)], teacher, ev.inchargeId, subject, year, section, n, carts, carts ? "Room 1.12" : null, ev.crossCover, fakeNow.toISOString(), ev.inchargeIds.slice(1)],
+      );
+      for (const who of ev.inchargeIds) {
+        await db.query("INSERT INTO booking_slots (booking_id, incharge_id, resource_id, room_key, date, block_id, units) VALUES ($1,$2,$3,$4,$5,$6,1)", [id, who, resourceId, carts ? null : resourceId, today, P(block)]);
+        world.holds.push({ bookingId: id, resourceId, inchargeId: who, date: today, blockId: P(block), units: 1 });
+      }
     }
   }
   // An outside meeting in Ram's calendar (shows cross-cover in the grid).
@@ -114,9 +201,10 @@ async function seedHistory(db: Db) {
       for (const resourceId of ["quantum", "carts", "dollarx", "xreal", "strike"]) {
         if (rnd() > (resourceId === "carts" ? 0.3 : 0.38)) continue;
         const teacher = teachers[Math.floor(rnd() * teachers.length)];
-        const units = resourceId === "carts" ? 1 + Math.floor(rnd() * 5) : 1;
+        const units = resourceId === "carts" ? 1 + Math.floor(rnd() * 3) : 1;
         const ev = evaluate(world, { resourceId, date, blockIds: [P(block)], units, now: fakeNow });
         if (!ev.ok) {
+          if (ev.code === "timetabled") continue; // nobody tries to book over the ICT timetable
           await db.query("INSERT INTO booking_attempts (teacher_id, resource_id, date, block_id, code, at) VALUES ($1,$2,$3,$4,$5,$6)", [teacher, resourceId, date, P(block), ev.code, fakeNow.toISOString()]);
           continue;
         }
@@ -125,17 +213,19 @@ async function seedHistory(db: Db) {
         const subject = SUBJECTS[Math.floor(rnd() * 8)];
         const year = YEARS[3 + Math.floor(rnd() * 11)];
         await db.query(
-          `INSERT INTO bookings (id, resource_id, date, block_ids, teacher_id, incharge_id, subject, year_group, section, student_count, cart_count, classroom, status, cross_cover, created_by, created_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$5,$15)`,
+          `INSERT INTO bookings (id, resource_id, date, block_ids, teacher_id, incharge_id, subject, year_group, section, student_count, cart_count, classroom, status, cross_cover, created_by, created_at, curriculum_ids, support_ids)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$5,$15,$16,$17)`,
           [id, resourceId, date, [P(block)], teacher, ev.inchargeId, subject, year, SECTIONS[Math.floor(rnd() * 4)], 18 + Math.floor(rnd() * 10),
             resourceId === "carts" ? units : null, resourceId === "carts" ? `Room ${1 + Math.floor(rnd() * 3)}.${10 + Math.floor(rnd() * 9)}` : null, status, ev.crossCover,
-            new Date(fakeNow.getTime() - Math.floor(rnd() * 10) * 86_400_000).toISOString()],
+            new Date(fakeNow.getTime() - Math.floor(rnd() * 10) * 86_400_000).toISOString(), sampleLevels(year, id), ev.inchargeIds.slice(1)],
         );
         if (status !== "cancelled") {
-          await db.query("INSERT INTO booking_slots (booking_id, incharge_id, resource_id, room_key, date, block_id, units) VALUES ($1,$2,$3,$4,$5,$6,$7)", [
-            id, ev.inchargeId, resourceId, resourceId === "carts" ? null : resourceId, date, P(block), units,
-          ]);
-          world.holds.push({ bookingId: id, resourceId, inchargeId: ev.inchargeId, date, blockId: P(block), units });
+          for (const who of ev.inchargeIds) {
+            await db.query("INSERT INTO booking_slots (booking_id, incharge_id, resource_id, room_key, date, block_id, units) VALUES ($1,$2,$3,$4,$5,$6,1)", [
+              id, who, resourceId, resourceId === "carts" ? null : resourceId, date, P(block),
+            ]);
+            world.holds.push({ bookingId: id, resourceId, inchargeId: who, date, blockId: P(block), units: 1 });
+          }
         }
       }
     }
@@ -167,4 +257,12 @@ async function seedHistory(db: Db) {
       [newId("iss"), new Date(now().getTime() - 86_400_000).toISOString()],
     );
   }
+}
+
+/** Tag some past KS3 lessons with a sample level, so the coverage report has data. */
+function sampleLevels(year: string, id: string): string[] {
+  const levels = SAMPLE_CURRICULUM.filter((c) => c[3] === year);
+  if (!levels.length) return [];
+  const h = [...id].reduce((n, ch) => (n * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  return h % 4 === 0 ? [] : [`cl-${levels[h % levels.length][0].toLowerCase()}`];
 }

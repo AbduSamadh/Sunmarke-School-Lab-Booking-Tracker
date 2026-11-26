@@ -13,6 +13,8 @@ export interface Lookups {
   subjects: string[];
   years: string[];
   sections: string[];
+  /** Release 2: KS3 progressive plan levels a lesson can be tagged with. */
+  curriculum?: { id: string; code: string; strand: string; title: string; yearGroup: string }[];
 }
 export interface Defaults {
   subject: string;

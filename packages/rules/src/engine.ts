@@ -1,6 +1,7 @@
 import type {
   Block,
   Blackout,
+  TimetabledLesson,
   BookingRequest,
   Evaluation,
   ISODate,
@@ -64,16 +65,49 @@ export function mondayOf(date: ISODate): ISODate {
 // covers a date wins (Ramadan/Friday over Standard).
 // ---------------------------------------------------------------------------
 
-export function timetableForDate(timetables: Timetable[], date: ISODate): Timetable | null {
+export function timetableForDate(timetables: Timetable[], date: ISODate, campusId?: string): Timetable | null {
   const wd = isoWeekday(date);
   const candidates = timetables.filter(
     (t) =>
+      (!t.campusId || !campusId || t.campusId === campusId) &&
       t.weekdays.includes(wd) &&
       (t.validFrom === null || t.validFrom <= date) &&
       (t.validTo === null || t.validTo >= date),
   );
   if (candidates.length === 0) return null;
   return candidates.sort((a, b) => b.priority - a.priority)[0];
+}
+
+// ---------------------------------------------------------------------------
+// Campuses (Release 2). Each campus has its own labs, in-charges, timetables and
+// blackouts; the rules are the same. A world is always judged one campus at a time.
+// ---------------------------------------------------------------------------
+
+/** The campus a block belongs to, found through the timetable that owns it. */
+export function campusOfBlock(timetables: Timetable[], blockId: string): string | undefined {
+  return timetables.find((t) => t.blocks.some((b) => b.id === blockId))?.campusId;
+}
+
+/** Only one campus's labs, timetables, blackouts and assignments. */
+export function scopeToCampus(state: WorldState, campusId: string | undefined): WorldState {
+  if (!campusId) return state;
+  const resources = state.resources.filter((r) => !r.campusId || r.campusId === campusId);
+  const ids = new Set(resources.map((r) => r.id));
+  return {
+    ...state,
+    resources,
+    timetables: state.timetables.filter((t) => !t.campusId || t.campusId === campusId),
+    blackouts: state.blackouts.filter((b) => (b.resourceId ? ids.has(b.resourceId) : !b.campusId || b.campusId === campusId)),
+    assignments: state.assignments.filter((a) => ids.has(a.resourceId)),
+    lessons: state.lessons?.filter((l) => ids.has(l.resourceId)),
+  };
+}
+
+/** The timetabled lesson using this lab in this block on this date, if any. */
+export function lessonFor(lessons: TimetabledLesson[] | undefined, resourceId: string, date: ISODate, blockCode: string): TimetabledLesson | null {
+  if (!lessons?.length) return null;
+  const wd = isoWeekday(date);
+  return lessons.find((l) => l.resourceId === resourceId && l.weekday === wd && l.blockCode === blockCode) ?? null;
 }
 
 function sortedBlocks(t: Timetable): Block[] {
@@ -169,10 +203,11 @@ function blocked(code: Blocked["code"], reason: string, extra: Partial<Blocked> 
   return { ok: false, code, reason, canWaitlist: false, ...extra };
 }
 
-export function evaluate(state: WorldState, req: BookingRequest): Evaluation {
-  const s = state.settings;
-  const resource = state.resources.find((r) => r.id === req.resourceId && r.active);
+export function evaluate(world: WorldState, req: BookingRequest): Evaluation {
+  const s = world.settings;
+  const resource = world.resources.find((r) => r.id === req.resourceId && r.active);
   if (!resource) return blocked("unknown_resource", "This lab or cart pool is not available for booking.");
+  const state = scopeToCampus(world, resource.campusId);
 
   const timetable = timetableForDate(state.timetables, req.date);
   if (!timetable) return blocked("no_timetable", "No school timetable on this day.");
@@ -230,6 +265,8 @@ export function evaluate(state: WorldState, req: BookingRequest): Evaluation {
   for (const b of blocks) {
     const bo = blackoutFor(state.blackouts, resource.id, req.date, b.code);
     if (bo) return blocked("blackout", blackoutLabel(bo));
+    const lesson = lessonFor(state.lessons, resource.id, req.date, b.code);
+    if (lesson) return blocked("timetabled", `Timetabled: ${lesson.label}`);
     const holds = holdsAt(state.holds, resource.id, req.date, b.id, req.ignoreBookingId);
     // R9 + R1.1: a freed slot is held for the first waitlisted teacher until the offer expires.
     const offers = (state.offers ?? []).filter(
@@ -257,26 +294,43 @@ export function evaluate(state: WorldState, req: BookingRequest): Evaluation {
   }
   if (resource.type === "room") unitsLeftAfter = 0;
 
-  // R2–R5: primary first, then fallback; the same person must cover every block (T14)
+  // R2–R5: primary first, then the next in priority; the same people cover every block (T14).
+  // AI Carts: one in-charge goes with each cart, so n carts need n free in-charges (abd, 25 Nov).
+  const needed = resource.type === "cart_pool" ? units : 1;
   const cands = candidatesFor(state, resource.id);
   const reasons: string[] = [];
+  const picked: typeof cands = [];
   for (const c of cands) {
+    if (picked.length === needed) break;
     const busy = blocks.map((b) => ({ b, r: inchargeBusy(state, c.staffId, req.date, b, req.ignoreBookingId) })).find((x) => x.r);
-    if (!busy) {
-      return {
-        ok: true,
-        inchargeId: c.staffId,
-        inchargeName: staffName(state, c.staffId),
-        crossCover: c.priority !== cands[0].priority,
-        unitsLeftAfter,
-      };
-    }
-    reasons.push(`${staffName(state, c.staffId)} busy ${busy.r!.text}${blocks.length > 1 ? ` at ${busy.b.code}` : ""}`);
+    if (!busy) picked.push(c);
+    else reasons.push(`${staffName(state, c.staffId)} busy ${busy.r!.text}${blocks.length > 1 ? ` at ${busy.b.code}` : ""}`);
   }
+  if (picked.length === needed) {
+    return {
+      ok: true,
+      inchargeId: picked[0].staffId,
+      inchargeName: staffName(state, picked[0].staffId),
+      crossCover: picked[0].priority !== cands[0].priority,
+      unitsLeftAfter,
+      inchargeIds: picked.map((c) => c.staffId),
+      inchargeNames: picked.map((c) => staffName(state, c.staffId)),
+    };
+  }
+  if (needed > 1 && picked.length > 0)
+    return blocked("no_incharge", `Only ${picked.length} lab in-charge${picked.length === 1 ? " is" : "s are"} free, and each cart goes with its own in-charge.`, {
+      suggestion: `Book ${picked.length} cart${picked.length === 1 ? "" : "s"}, or pick another period. ${reasons.join("; ")}`,
+      canWaitlist: true,
+    });
   return blocked("no_incharge", "No lab in-charge available", {
     suggestion: reasons.join("; "),
     canWaitlist: true,
   });
+}
+
+/** How many in-charges assigned to a resource are free for a block (caps AI Carts per period). */
+export function freeIncharges(state: WorldState, resourceId: string, date: ISODate, block: Block, ignoreBookingId?: string): number {
+  return candidatesFor(state, resourceId).filter((c) => !inchargeBusy(state, c.staffId, date, block, ignoreBookingId)).length;
 }
 
 export function holdsAt(holds: SlotHold[], resourceId: string, date: ISODate, blockId: string, ignore?: string) {
@@ -299,13 +353,17 @@ export function cellStatus(state: WorldState, resource: Resource, date: ISODate,
   const bookingIds = holdsAt(state.holds, resource.id, date, block.id).map((h) => h.bookingId);
   if (ev.ok) {
     const used = holdsAt(state.holds, resource.id, date, block.id).reduce((n, h) => n + h.units, 0);
+    const scoped = scopeToCampus(state, resource.campusId);
+    // AI Carts: what can still go out is limited by carts left and by free in-charges (one per cart).
+    const cap = resource.type === "cart_pool" ? Math.min(resource.units, state.settings.maxCartsPerBooking, candidatesFor(scoped, resource.id).length) : resource.units;
+    const left = resource.type === "cart_pool" ? Math.min(resource.units - used, freeIncharges(scoped, resource.id, date, block), cap) : resource.units - used;
     return {
       state: "free",
       inchargeId: ev.inchargeId,
       inchargeName: ev.inchargeName,
       crossCover: ev.crossCover,
-      unitsLeft: resource.units - used,
-      unitsTotal: resource.units,
+      unitsLeft: left,
+      unitsTotal: cap,
     };
   }
   if (ev.code === "resource_booked") return { state: "booked", bookingIds, reason: ev.reason };
@@ -325,8 +383,9 @@ export interface Alternative {
  * Next steps when a slot is unavailable: the same resource at other blocks that day,
  * then other resources at the same block. Used for "Just taken" and blocked cells.
  */
-export function alternatives(state: WorldState, req: BookingRequest, limit = 3): Alternative[] {
+export function alternatives(world: WorldState, req: BookingRequest, limit = 3): Alternative[] {
   const out: Alternative[] = [];
+  const state = scopeToCampus(world, world.resources.find((r) => r.id === req.resourceId)?.campusId);
   const t = timetableForDate(state.timetables, req.date);
   if (!t) return out;
   const blocks = sortedBlocks(t).filter((b) => b.bookable);
@@ -373,7 +432,7 @@ export function findConflicts(state: WorldState): Conflict[] {
   const out: Conflict[] = [];
   const ext = externalBusy(state.busy);
   for (const h of state.holds) {
-    const t = timetableForDate(state.timetables, h.date);
+    const t = timetableForDate(state.timetables, h.date, campusOfBlock(state.timetables, h.blockId));
     const block = t?.blocks.find((b) => b.id === h.blockId);
     if (!block) continue;
     const iv = blockInterval(h.date, block, state.settings);
@@ -399,7 +458,7 @@ export function findConflicts(state: WorldState): Conflict[] {
 
 /** Can this person cover every block of a booking? Returns the first reason they cannot. */
 export function canCover(state: WorldState, staffId: string, date: ISODate, blockIds: string[], ignoreBookingId?: string): BusyReason | null {
-  const t = timetableForDate(state.timetables, date);
+  const t = timetableForDate(state.timetables, date, blockIds[0] ? campusOfBlock(state.timetables, blockIds[0]) : undefined);
   for (const id of blockIds) {
     const b = t?.blocks.find((x) => x.id === id);
     if (!b) return { kind: "booking", text: "block not on timetable" };
@@ -439,4 +498,9 @@ export function recurringDates(start: ISODate, end: ISODate, everyWeeks = 1, max
 export function weekRange(date: ISODate): { from: ISODate; to: ISODate } {
   const from = mondayOf(date);
   return { from, to: addDays(from, 6) };
+}
+
+/** A block by id on a date, from the timetable of the campus that owns it. */
+export function blockOn(timetables: Timetable[], date: ISODate, blockId: string): Block | undefined {
+  return timetableForDate(timetables, date, campusOfBlock(timetables, blockId))?.blocks.find((b) => b.id === blockId);
 }

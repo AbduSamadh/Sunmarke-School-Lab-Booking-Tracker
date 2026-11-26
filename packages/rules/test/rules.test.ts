@@ -103,9 +103,9 @@ describe("rule matrix", () => {
 
   it("T6 calendar meeting makes the primary busy", () => {
     const busy = [{ staffId: "ram", start: localToInstant(TUE, "10:00", DEFAULT_SETTINGS), end: localToInstant(TUE, "10:30", DEFAULT_SETTINGS), title: "SLT" }];
-    expect(evaluate(world({ busy }), req("carts", "P3", { units: 2 }))).toMatchObject({ ok: true, inchargeId: "abdul" });
+    expect(evaluate(world({ busy }), req("carts", "P3", { units: 1 }))).toMatchObject({ ok: true, inchargeId: "abdul" });
     const both = [...busy, { ...busy[0], staffId: "abdul" }];
-    expect(evaluate(world({ busy: both }), req("carts", "P3", { units: 2 }))).toMatchObject({ ok: false, code: "no_incharge" });
+    expect(evaluate(world({ busy: both }), req("carts", "P3", { units: 1 }))).toMatchObject({ ok: false, code: "no_incharge" });
   });
 
   it("T6b events the app wrote for its own bookings are not double counted", () => {
@@ -113,18 +113,53 @@ describe("rule matrix", () => {
     expect(evaluate(world({ busy }), req("quantum"))).toMatchObject({ ok: true, inchargeId: "ram" });
   });
 
-  it("T7 only 3 carts left, and a second cart class needs Abdul", () => {
-    const w = world({ holds: [hold("b1", "carts", "ram", "P3", 7)] });
-    expect(evaluate(w, req("carts", "P3", { units: 4 }))).toMatchObject({ ok: false, code: "not_enough_carts", reason: "Only 3 of 10 carts left at P3." });
-    expect(evaluate(w, req("carts", "P3", { units: 3 }))).toMatchObject({ ok: true, inchargeId: "abdul", unitsLeftAfter: 0 });
-    const w2 = world({ holds: [hold("b1", "carts", "ram", "P3", 7), hold("b2", "strike", "abdul")] });
-    expect(evaluate(w2, req("carts", "P3", { units: 3 }))).toMatchObject({ ok: false, code: "no_incharge" });
+  it("T7 carts left in the pool still limit a booking", () => {
+    const w = world({ holds: [hold("b1", "carts", "ram", "P3", 9)] });
+    expect(evaluate(w, req("carts", "P3", { units: 2 }))).toMatchObject({ ok: false, code: "not_enough_carts", reason: "Only 1 of 10 carts left at P3." });
+    expect(evaluate(w, req("carts", "P3", { units: 1 }))).toMatchObject({ ok: true, inchargeId: "abdul", unitsLeftAfter: 0 });
+  });
+
+  // abd, 25 Nov 2026: at most 3 carts, each with its own in-charge; Nael is the third in-charge.
+  const three = () => {
+    const base = world();
+    return world({
+      staff: [...base.staff, { id: "nael", name: "Nael" }],
+      assignments: [...base.assignments, ...["quantum", "carts", "dollarx", "xreal", "strike"].map((r) => ({ resourceId: r, staffId: "nael", priority: 3 }))],
+    });
+  };
+  it("T7b each cart goes out with its own in-charge, up to 3", () => {
+    expect(evaluate(three(), req("carts", "P3", { units: 3 }))).toMatchObject({ ok: true, inchargeIds: ["ram", "abdul", "nael"], inchargeNames: ["Ram", "Abdul", "Nael"] });
+    expect(evaluate(three(), req("carts", "P3", { units: 4 }))).toMatchObject({ ok: false, code: "invalid_units", reason: "Choose between 1 and 3 carts." });
+    expect(evaluate(three(), req("quantum", "P3"))).toMatchObject({ ok: true, inchargeIds: ["ram"] });
+  });
+  it("T7c carts need as many free in-charges as carts", () => {
+    const w = { ...three(), holds: [hold("b1", "strike", "abdul")] };
+    expect(evaluate(w, req("carts", "P3", { units: 3 }))).toMatchObject({ ok: false, code: "no_incharge", reason: "Only 2 lab in-charges are free, and each cart goes with its own in-charge." });
+    expect(evaluate(w, req("carts", "P3", { units: 2 }))).toMatchObject({ ok: true, inchargeIds: ["ram", "nael"] });
+  });
+  it("T7d three carts out means no lab can be booked that period", () => {
+    const w = { ...three(), holds: ["ram", "abdul", "nael"].map((id) => hold("c1", "carts", id)) };
+    for (const lab of ["quantum", "dollarx", "xreal", "strike"]) expect(evaluate(w, req(lab, "P3"))).toMatchObject({ ok: false, code: "no_incharge" });
+    expect(evaluate(w, req("quantum", "P4")).ok).toBe(true);
+    const cell = cellStatus(three(), three().resources[1], TUE, S.blocks.find((b) => b.code === "P3")!, NOW);
+    expect(cell).toMatchObject({ state: "free", unitsLeft: 3, unitsTotal: 3 });
   });
 
   it("T11 blackout blocks with its reason", () => {
     const w = world({ blackouts: [{ id: "x", resourceId: "xreal", dateFrom: WED, dateTo: WED, blockCodes: null, reason: "maintenance" }] });
     expect(evaluate(w, { ...req("xreal", "P2"), date: WED })).toMatchObject({ ok: false, code: "blackout", reason: "Maintenance" });
     expect(evaluate(w, { ...req("quantum", "P2"), date: WED }).ok).toBe(true);
+  });
+
+  it("T11b a timetabled ICT lesson takes a hybrid lab that period, every week", () => {
+    const w = world({ lessons: [{ id: "l1", resourceId: "strike", weekday: 2, blockCode: "P3", label: "ICT Y8 B" }] });
+    expect(evaluate(w, req("strike", "P3"))).toMatchObject({ ok: false, code: "timetabled", reason: "Timetabled: ICT Y8 B" });
+    expect(evaluate(w, { ...req("strike", "P3"), date: "2026-12-15" })).toMatchObject({ ok: false, code: "timetabled" });
+    expect(evaluate(w, req("strike", "P4")).ok).toBe(true);
+    expect(evaluate(w, { ...req("strike", "P3"), date: WED }).ok).toBe(true);
+    expect(evaluate(w, req("xreal", "P3")).ok).toBe(true);
+    const cell = cellStatus(w, w.resources.find((r) => r.id === "strike")!, TUE, S.blocks.find((b) => b.code === "P3")!, NOW);
+    expect(cell).toMatchObject({ state: "unavailable", code: "timetabled" });
   });
 
   it("T12 Friday timetable shows only Friday blocks", () => {
@@ -210,7 +245,7 @@ describe("other rules", () => {
     const q = w.resources[0];
     expect(cellStatus(w, q, TUE, block("P3"), NOW)).toMatchObject({ state: "booked" });
     expect(cellStatus(w, w.resources[2], TUE, block("P3"), NOW)).toMatchObject({ state: "unavailable", reason: "No lab in-charge available" });
-    expect(cellStatus(w, w.resources[1], TUE, block("P4"), NOW)).toMatchObject({ state: "free", unitsLeft: 10, inchargeName: "Ram" });
+    expect(cellStatus(w, w.resources[1], TUE, block("P4"), NOW)).toMatchObject({ state: "free", unitsLeft: 2, unitsTotal: 2, inchargeName: "Ram" });
     expect(cellStatus(w, q, TUE, block("Lunch"), NOW)).toMatchObject({ state: "closed" });
   });
 

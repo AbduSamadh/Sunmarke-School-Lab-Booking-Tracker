@@ -75,28 +75,28 @@ export function BookingSheet(props: {
   const firstField = useRef<HTMLSelectElement | null>(null);
   const closeBtn = useRef<HTMLButtonElement | null>(null);
 
-  const bookable = day.blocks.filter((b) => b.bookable);
-  const idx = bookable.findIndex((b) => b.id === block.id);
-  const nextBlock = idx >= 0 ? bookable[idx + 1] : undefined;
-  const nextFree = nextBlock && day.cells[resource.id][nextBlock.id]?.kind === "free" ? nextBlock : undefined;
 
   const [f, setF] = useState({
     subject: defaults.subject,
     yearGroup: defaults.yearGroup,
     section: defaults.section,
     studentCount: String(defaults.studentCount || ""),
-    cartCount: String(Math.min(defaults.cartCount || 4, free && cell.kind === "free" ? cell.unitsLeft : 10)),
+    cartCount: String(Math.max(1, Math.min(defaults.cartCount || 1, free && cell.kind === "free" ? cell.unitsLeft : 3))),
     classroom: defaults.classroom,
     objective: "",
     lessonPlanUrl: "",
     specialRequirements: "",
-    double: false,
+    otherSubject: "",
     onBehalfOf: "",
     repeat: false,
     everyWeeks: "1",
     endDate: addDaysIso(day.date, 7 * 9),
+    curriculumIds: [] as string[],
   });
   const isAdmin = props.role === "admin";
+  // Release 2: levels for the chosen year group (levels with no year apply to every year).
+  const levels = (lookups.curriculum ?? []).filter((l) => !l.yearGroup || l.yearGroup === f.yearGroup);
+  const picked = f.curriculumIds.filter((id) => levels.some((l) => l.id === id));
 
   useEffect(() => {
     setStep(cell.kind === "free" ? { s: "form" } : { s: "info", loading: true, reason: cellReason(cell), canWaitlist: false, alternatives: [] });
@@ -143,13 +143,14 @@ export function BookingSheet(props: {
       startDate: day.date,
       endDate: f.endDate,
       everyWeeks: Number(f.everyWeeks),
-      blockCodes: f.double && nextFree ? [block.code, nextFree.code] : [block.code],
-      subject: f.subject,
+      blockCodes: [block.code],
+      subject: f.subject === "Other" ? f.otherSubject.trim() : f.subject,
       yearGroup: f.yearGroup,
       section: f.section,
       studentCount: Number(f.studentCount),
       objective: f.objective,
       specialRequirements: f.specialRequirements,
+      ...(picked.length ? { curriculumIds: picked } : {}),
       ...(isCart ? { cartCount: Number(f.cartCount), classroom: f.classroom } : {}),
       ...(isAdmin && f.onBehalfOf ? { onBehalfOf: f.onBehalfOf } : {}),
       preview,
@@ -184,8 +185,8 @@ export function BookingSheet(props: {
     const body: Record<string, unknown> = {
       resourceId: resource.id,
       date: day.date,
-      blockIds: f.double && nextFree ? [block.id, nextFree.id] : [block.id],
-      subject: f.subject,
+      blockIds: [block.id],
+      subject: f.subject === "Other" ? f.otherSubject.trim() : f.subject,
       yearGroup: f.yearGroup,
       section: f.section,
       studentCount: Number(f.studentCount),
@@ -193,6 +194,7 @@ export function BookingSheet(props: {
       specialRequirements: f.specialRequirements,
       lessonPlanUrl: f.lessonPlanUrl,
     };
+    if (picked.length) body.curriculumIds = picked;
     if (isCart) {
       body.cartCount = Number(f.cartCount);
       body.classroom = f.classroom;
@@ -341,6 +343,12 @@ export function BookingSheet(props: {
                   </select>
                 </div>
               </div>
+              {f.subject === "Other" && (
+                <div className="field">
+                  <label htmlFor="f-other">Which subject?</label>
+                  <input id="f-other" type="text" required maxLength={80} placeholder="e.g. Robotics club" value={f.otherSubject} onChange={set("otherSubject")} />
+                </div>
+              )}
               <div className={isCart ? "row3" : "row2"}>
                 <div className="field">
                   <label htmlFor="f-students">Students</label>
@@ -350,7 +358,8 @@ export function BookingSheet(props: {
                   <>
                     <div className="field">
                       <label htmlFor="f-carts">Carts</label>
-                      <input id="f-carts" type="number" inputMode="numeric" min={1} max={cell.kind === "free" ? cell.unitsLeft : 10} required value={f.cartCount} onChange={set("cartCount")} />
+                      <input id="f-carts" type="number" inputMode="numeric" min={1} max={cell.kind === "free" ? cell.unitsLeft : 3} required value={f.cartCount} aria-describedby="f-carts-hint" onChange={set("cartCount")} />
+                      <div className="hint" id="f-carts-hint">Up to 3. Each cart comes with its own lab in-charge.</div>
                     </div>
                     <div className="field">
                       <label htmlFor="f-room">Classroom</label>
@@ -359,14 +368,6 @@ export function BookingSheet(props: {
                   </>
                 )}
               </div>
-              {nextFree && (
-                <div className="field">
-                  <label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 400, minHeight: 44 }}>
-                    <input type="checkbox" checked={f.double} onChange={set("double")} style={{ width: 20, height: 20 }} />
-                    Double lesson: also book {nextFree.code} ({nextFree.start}–{nextFree.end})
-                  </label>
-                </div>
-              )}
               <div className="field">
                 <label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 400, minHeight: 44 }}>
                   <input type="checkbox" checked={f.repeat} onChange={set("repeat")} style={{ width: 20, height: 20 }} />
@@ -394,6 +395,27 @@ export function BookingSheet(props: {
                 <label htmlFor="f-obj">Lesson objective <span className="muted">(optional)</span></label>
                 <input id="f-obj" type="text" maxLength={300} value={f.objective} onChange={set("objective")} placeholder="e.g. Test a simple circuit" />
               </div>
+              {levels.length > 0 && (
+                <fieldset className="field curriculum-pick">
+                  <legend>Curriculum <span className="muted">(optional, up to 5)</span></legend>
+                  <div className="chips">
+                    {levels.map((l) => {
+                      const on = f.curriculumIds.includes(l.id);
+                      return (
+                        <label key={l.id} className={`chip-check${on ? " is-on" : ""}`} title={l.title}>
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            disabled={!on && picked.length >= 5}
+                            onChange={() => setF((x) => ({ ...x, curriculumIds: on ? x.curriculumIds.filter((y) => y !== l.id) : [...x.curriculumIds, l.id] }))}
+                          />
+                          <span><strong>{l.code}</strong> {l.title}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              )}
               <details>
                 <summary style={{ cursor: "pointer", minHeight: 36, fontSize: 14 }}>More details</summary>
                 <div className="field" style={{ marginTop: 8 }}>
@@ -409,7 +431,7 @@ export function BookingSheet(props: {
             <div className="sheet-foot">
               <button type="button" className="btn" onClick={() => props.onClose(changed)}>Cancel</button>
               <button type="submit" className="btn btn-primary" disabled={step.s === "sending"}>
-                {step.s === "sending" ? (f.repeat ? "Checking…" : "Booking…") : f.repeat ? "Check dates" : `Book ${resource.name.replace(" Lab", "")}, ${fmtDateShort(day.date).split(" ")[0]} ${f.double && nextFree ? `${block.code}–${nextFree.code}` : block.code}`}
+                {step.s === "sending" ? (f.repeat ? "Checking…" : "Booking…") : f.repeat ? "Check dates" : `Book ${resource.name.replace(" Lab", "")}, ${fmtDateShort(day.date).split(" ")[0]} ${block.code}`}
               </button>
             </div>
           </form>
@@ -419,7 +441,7 @@ export function BookingSheet(props: {
           <>
             <div className="sheet-body" aria-live="polite">
               <svg className="tick" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="22" /><path d="M16 27l7 7 14-15" /></svg>
-              <div className="notice notice-ok">Confirmed. A confirmation email with a calendar invite is on its way.</div>
+              <div className="notice notice-ok">Confirmed. A Teams message and a calendar invite are on their way.</div>
               <div className="summary">
                 <dl>
                   <dt>What</dt>
@@ -499,7 +521,7 @@ export function BookingSheet(props: {
             <div className="sheet-body" aria-live="polite">
               {step.created ? (
                 <div className="notice notice-ok" role="status">
-                  Booked {step.lines.filter((l) => l.ok).length} of {step.lines.length} dates. Each has its own confirmation email. Cancel the whole series from My bookings.
+                  Booked {step.lines.filter((l) => l.ok).length} of {step.lines.length} dates. Each has its own Teams message. Cancel the whole series from My bookings.
                 </div>
               ) : (
                 <p className="small">
@@ -546,7 +568,7 @@ export function BookingSheet(props: {
           <>
             <div className="sheet-body">
               <div className="notice notice-ok" role="status">
-                You are number {step.position} on the waitlist. If this slot frees up, you get an email straight away.
+                You are number {step.position} on the waitlist. If this slot frees up, you get a Teams message straight away.
               </div>
             </div>
             <div className="sheet-foot"><button className="btn btn-primary" onClick={() => props.onClose(true)}>Done</button></div>

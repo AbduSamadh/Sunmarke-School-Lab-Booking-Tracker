@@ -117,20 +117,54 @@ describe("database-backed rules", () => {
   });
 
   it("cart booking requires a classroom and records cart count", async () => {
-    await expect(createBooking(db, sara, { ...quantumP4, resourceId: "carts", cartCount: 4 })).rejects.toMatchObject({ status: 422 });
-    const r = await createBooking(db, sara, { ...quantumP4, resourceId: "carts", cartCount: 4, classroom: "Room 2.14" });
-    expect(r).toMatchObject({ ok: true, booking: { cartCount: 4, classroom: "Room 2.14" } });
+    await expect(createBooking(db, sara, { ...quantumP4, resourceId: "carts", cartCount: 2 })).rejects.toMatchObject({ status: 422 });
+    const r = await createBooking(db, sara, { ...quantumP4, resourceId: "carts", cartCount: 2, classroom: "Room 2.14" });
+    expect(r).toMatchObject({ ok: true, booking: { cartCount: 2, classroom: "Room 2.14", inchargeName: "Ram", supportNames: ["Nael"] } });
+  });
+
+  it("hybrid labs: timetabled ICT lessons block their periods; Nael comes after Ram for Quantum (abd, 25 Nov)", async () => {
+    // TUE is a Tuesday: the sample ICT timetable has Strike at P1, P2 and P6.
+    expect(await createBooking(db, omar, { ...quantumP4, resourceId: "strike", blockIds: [P("P2")] })).toMatchObject({ ok: false, code: "timetabled", reason: expect.stringMatching(/^Timetabled: ICT Y\d+ [A-D]$/) });
+    const ok = await createBooking(db, omar, { ...quantumP4, resourceId: "strike", blockIds: [P("P5")], subject: "Computing" });
+    expect(ok).toMatchObject({ ok: true, booking: { inchargeName: "Abdul" } });
+    const order = await db.query<{ staff_id: string }>("SELECT staff_id FROM incharge_assignments WHERE resource_id = 'quantum' ORDER BY priority");
+    expect(order.map((o) => o.staff_id)).toEqual(["ram", "nael", "abdul"]);
+    const leaders = await db.query<{ id: string }>("SELECT id FROM staff WHERE role = 'viewer' ORDER BY id");
+    expect(leaders.map((l) => l.id)).toEqual(["bod", "neil", "principal", "sreejit"]);
+  });
+
+  it("three carts take all three in-charges, so no lab can be booked that period (abd, 25 Nov)", async () => {
+    const r = await createBooking(db, sara, { ...quantumP4, resourceId: "carts", cartCount: 3, classroom: "Room 2.14" });
+    if (!r.ok) throw new Error(r.reason);
+    expect(r.booking.staffIds).toEqual(["ram", "nael", "abdul"]);
+    const slots = await db.query("SELECT incharge_id FROM booking_slots WHERE booking_id = $1 AND active", [r.booking.id]);
+    expect(slots).toHaveLength(3);
+    for (const lab of ["quantum", "dollarx", "xreal", "strike"])
+      expect(await createBooking(db, omar, { ...quantumP4, resourceId: lab })).toMatchObject({ ok: false, code: "no_incharge" });
+    expect(await createBooking(db, omar, { ...quantumP4, resourceId: "carts", cartCount: 4, classroom: "R1" })).toMatchObject({ ok: false, code: "invalid_units" });
+    // Everyone going is told.
+    const msgs = await db.query<{ recipient: string; channel: string }>("SELECT recipient, channel FROM notifications WHERE booking_id = $1 AND template = 'confirmed'", [r.booking.id]);
+    expect(msgs.map((m) => m.recipient).sort()).toEqual(["abdul@sunmarke.example", "nael@sunmarke.example", "ram@sunmarke.example", "sara.khan@sunmarke.example"]);
+    expect(msgs.every((m) => m.channel === "teams")).toBe(true);
+  });
+
+  it("one period per booking, and \"Other\" needs the subject written in", async () => {
+    const { BookingInput } = await import("../lib/shared/schemas");
+    expect(BookingInput.safeParse({ ...quantumP4, blockIds: [P("P4"), P("P5")] }).success).toBe(false);
+    expect(BookingInput.safeParse({ ...quantumP4, subject: "Other" }).success).toBe(false);
+    expect(BookingInput.safeParse({ ...quantumP4, subject: "Robotics club" }).success).toBe(true);
   });
 
   it("window: teachers cannot override, admin can", async () => {
-    const soon = { ...quantumP4, date: "2026-11-30", blockIds: [P("P7")], overrideWindow: true };
+    // P5: at P7 today all three in-charges are out with the seeded 3-cart booking.
+    const soon = { ...quantumP4, date: "2026-11-30", blockIds: [P("P5")], overrideWindow: true };
     expect(await createBooking(db, sara, soon)).toMatchObject({ ok: false, code: "window_too_soon" });
     expect(await createBooking(db, admin, soon)).toMatchObject({ ok: true });
   });
 
   it("daily digest goes to each in-charge once per day", async () => {
     const n = await sendDailyDigest(db, "2026-12-08");
-    expect(n).toBe(2);
+    expect(n).toBe(3); // Ram, Abdul and Nael
     expect(await sendDailyDigest(db, "2026-12-08")).toBe(0);
   });
 
